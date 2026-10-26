@@ -2,7 +2,7 @@
   "$comment": "Written by scripts/promote.mjs. Not a Kubernetes resource: records which source commit the pinned digest was built from, so DORA lead time can be measured exactly (docs/dora.md).",
   "environment": "staging",
   "image": "ghcr.io/umamidayo/healthqueue-api",
-  "digest": "sha256:5900e163a7d9297842ae89e29f62b680f7d153dd3b789181cc8079bfb5763d39",
-  "sourceRevision": "cadbd8d27e595d0b27f2f881fd1ce827b2619665",
-  "promotedAt": "2026-10-26T02:33:32.808Z"
+  "digest": "sha256:f28b2eb906b35b6dd13844f5e87004af8a6462241b6c11abcb24aa5088fbd149",
+  "sourceRevision": "d99ec4fcabf456ae75e000e814b4165bfe5a914a",
+  "promotedAt": "2026-10-26T03:39:56.784Z"
 }

@@ -13,4 +13,4 @@ labels:
 images:
   - name: healthqueue-api
     newName: ghcr.io/umamidayo/healthqueue-api
-    digest: sha256:5900e163a7d9297842ae89e29f62b680f7d153dd3b789181cc8079bfb5763d39
+    digest: sha256:f28b2eb906b35b6dd13844f5e87004af8a6462241b6c11abcb24aa5088fbd149
