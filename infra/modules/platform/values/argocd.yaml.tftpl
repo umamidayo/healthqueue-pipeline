@@ -1,0 +1,99 @@
+global:
+  domain: ${replace(replace(argocd_url, "https://", ""), "http://", "")}
+
+configs:
+  params:
+    # TLS is terminated by the ingress / port-forward in front of the server.
+    server.insecure: true
+  cm:
+    timeout.reconciliation: 180s
+    # Kyverno policy reports are noisy, high-churn objects; don't track them.
+    resource.exclusions: |
+      - apiGroups: [wgpolicyk8s.io, reports.kyverno.io]
+        kinds: ["*"]
+        clusters: ["*"]
+
+controller:
+  replicas: 1
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: ${monitoring}
+server:
+  replicas: ${replicas}
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: ${monitoring}
+repoServer:
+  replicas: ${replicas}
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: ${monitoring}
+applicationSet:
+  replicas: ${replicas}
+
+# Argo CD Notifications writes a GitHub Deployment (+ status) for every
+# successful or failed sync of a subscribed Application. Those records are the
+# deployment events the DORA collector reads (docs/adr/0009-dora-measurement.md).
+notifications:
+  enabled: true
+  argocdUrl: ${argocd_url}
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: ${monitoring}
+  secret:
+    # The GitHub App private key is created out-of-band; never via Tofu state.
+    create: false
+%{ if github_notifier ~}
+  notifiers:
+    service.github: |
+      appID: ${github_app_id}
+      installationID: ${github_app_installation_id}
+      privateKey: $github-privateKey
+%{ endif ~}
+  templates:
+    template.app-deployed: |
+      message: "{{.app.metadata.name}} synced {{.app.status.operationState.syncResult.revision}}"
+      github:
+        repoURLPath: "{{.app.spec.source.repoURL}}"
+        revisionPath: "{{.app.status.operationState.syncResult.revision}}"
+        status:
+          state: success
+          label: "continuous-delivery/{{.app.metadata.name}}"
+          targetURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}"
+        deployment:
+          state: success
+          environment: "{{index .app.metadata.labels \"healthqueue.io/environment\"}}"
+          environmentURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}"
+          logURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}?operation=true"
+          requiredContexts: []
+          autoMerge: false
+    template.app-sync-failed: |
+      message: "{{.app.metadata.name}} failed to sync {{.app.status.operationState.syncResult.revision}}"
+      github:
+        repoURLPath: "{{.app.spec.source.repoURL}}"
+        revisionPath: "{{.app.status.operationState.syncResult.revision}}"
+        status:
+          state: failure
+          label: "continuous-delivery/{{.app.metadata.name}}"
+          targetURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}"
+        deployment:
+          state: failure
+          environment: "{{index .app.metadata.labels \"healthqueue.io/environment\"}}"
+          environmentURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}"
+          logURL: "{{.context.argocdUrl}}/applications/argocd/{{.app.metadata.name}}?operation=true"
+          requiredContexts: []
+          autoMerge: false
+  triggers:
+    trigger.on-deployed: |
+      - description: Application is synced and healthy. Triggered once per commit.
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [app-deployed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+    trigger.on-sync-failed: |
+      - description: Application syncing has failed.
+        send: [app-sync-failed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']

@@ -1,0 +1,17 @@
+{
+  "name": "healthqueue-dora",
+  "version": "1.0.0",
+  "description": "DORA metrics, toil analysis and reporting for the HealthQueue delivery pipeline.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "healthqueue-dora": "cli.mjs"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "sample": "node cli.mjs sample --end 2026-10-25T00:00:00Z --out ../docs/dora/sample"
+  }
+}

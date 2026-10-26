@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: healthqueue
+  labels:
+    # Pod Security Admission: reject any pod that does not meet the
+    # "restricted" profile (non-root, no privilege escalation, seccomp, ...).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted

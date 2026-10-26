@@ -1,0 +1,34 @@
+# Default-deny for the namespace, then allow exactly what the API needs:
+# inbound HTTP (from anywhere in-cluster: ingress controller, Prometheus) and
+# DNS egress. The API makes no outbound calls.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: healthqueue-api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - ports:
+        - port: http
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP

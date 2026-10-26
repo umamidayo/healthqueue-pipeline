@@ -1,0 +1,69 @@
+# Admission-time verification of the supply chain. A Pod in a staging or
+# production namespace is admitted only if its image:
+#   1. is signed by this repository's CI workflow on main (Sigstore keyless),
+#   2. carries SLSA provenance produced by the isolated slsa-github-generator
+#      builder for a build of this repository's main branch (SLSA Build L3),
+#   3. carries a CycloneDX SBOM attestation signed by the same CI workflow.
+# The local environment is intentionally exempt (its image is built on the
+# laptop and never signed); see docs/adr/0007-signing-provenance-admission.md.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-healthqueue-images
+  annotations:
+    policies.kyverno.io/title: Verify HealthQueue image signature, provenance and SBOM
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+spec:
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: verify-signature-provenance-sbom
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaceSelector:
+                matchExpressions:
+                  - key: healthqueue.io/environment
+                    operator: In
+                    values: ["staging", "production"]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/umamidayo/healthqueue-api*"
+          failureAction: Enforce
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    issuer: https://token.actions.githubusercontent.com
+                    subject: https://github.com/umamidayo/healthqueue-pipeline/.github/workflows/ci.yml@refs/heads/main
+                    rekor:
+                      url: https://rekor.sigstore.dev
+          attestations:
+            - type: https://slsa.dev/provenance/v0.2
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: https://token.actions.githubusercontent.com
+                        subjectRegExp: ^https://github\.com/slsa-framework/slsa-github-generator/\.github/workflows/generator_container_slsa3\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
+                        rekor:
+                          url: https://rekor.sigstore.dev
+              conditions:
+                - all:
+                    - key: "{{ invocation.configSource.uri }}"
+                      operator: Equals
+                      value: git+https://github.com/umamidayo/healthqueue-pipeline@refs/heads/main
+                    - key: "{{ invocation.configSource.entryPoint }}"
+                      operator: Equals
+                      value: .github/workflows/ci.yml
+            - type: https://cyclonedx.org/bom
+              attestors:
+                - entries:
+                    - keyless:
+                        issuer: https://token.actions.githubusercontent.com
+                        subject: https://github.com/umamidayo/healthqueue-pipeline/.github/workflows/ci.yml@refs/heads/main
+                        rekor:
+                          url: https://rekor.sigstore.dev

@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Shared by every cluster: tenancy (AppProjects) and platform components.
+resources:
+  - projects.yaml
+  - platform-policies.yaml
+  - platform-observability.yaml

@@ -1,0 +1,132 @@
+# Local development on Windows
+
+Two levels, both on Windows 10/11 with Windows PowerShell 5.1 or PowerShell 7:
+
+1. **Offline checks** (no cluster, about 15 seconds): the same validation as CI.
+2. **Full environment** (minikube, about 10 minutes the first time): Argo CD,
+   Kyverno, Prometheus, Grafana, Alertmanager and the API. Production
+   minus signing.
+
+Design rationale: ADR 0012.
+
+## Prerequisites
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id OpenJS.NodeJS.LTS          # Node 24+
+winget install -e --id OpenTofu.Tofu
+winget install -e --id Kubernetes.kubectl
+winget install -e --id Kubernetes.minikube
+winget install -e --id Docker.DockerDesktop       # or use -Driver hyperv instead
+```
+
+The full environment needs about **8 GB RAM and 4 CPUs** for the minikube node.
+
+If script execution is blocked, allow it for the current session only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+## 1. Offline checks
+
+```powershell
+.\scripts\local\install-tools.ps1   # once: kubeconform, promtool, kyverno, actionlint (SHA-256 verified)
+.\scripts\check.ps1
+```
+
+`check.ps1` runs:
+
+- app lint, unit tests and the coverage gate,
+- promotion-script and DORA tests,
+- SLO rule drift,
+- all Kustomize renders,
+- OpenTofu fmt/validate,
+- kubeconform (strict, with CRD schemas),
+- promtool rule checks and alert unit tests,
+- Kyverno policy tests,
+- actionlint.
+
+It ends with a pass/fail table and a non-zero exit on failure. Without
+`install-tools.ps1`, the last four checks are skipped with a warning.
+
+## 2. Full environment
+
+```powershell
+.\scripts\local\up.ps1                 # GitOps: Argo CD syncs your pushed branch
+.\scripts\local\up.ps1 -Mode Direct    # inner loop: apply your working tree with kubectl
+.\scripts\local\verify.ps1             # end-to-end checks, exits non-zero on failure
+.\scripts\local\load.ps1 -Minutes 15 -ErrorPercent 20   # fire the burn-rate alerts
+.\scripts\local\down.ps1               # delete the cluster and local Tofu state
+```
+
+What `up.ps1` does:
+
+1. Starts minikube profile `healthqueue` (`-Driver docker` or `hyperv`) with
+   metrics-server.
+2. Builds `healthqueue-api:local` **inside** the minikube node from `./app`
+   (no registry needed).
+3. `tofu apply` on `infra/envs/local`: Kyverno, kube-prometheus-stack, Argo
+   CD, and in Argo mode the root Application, pointed at your remote and
+   current branch.
+4. Waits for the API rollout, then prints URLs and credentials.
+
+It is idempotent. Re-run it after code changes to rebuild the image and
+re-apply.
+
+### Which mode?
+
+| | `-Mode Argo` (default) | `-Mode Direct` |
+|---|---|---|
+| What gets deployed | your branch **as pushed** to `origin` | your working tree |
+| Exercises | the real GitOps path, AppProjects, sync waves, self-heal | manifests and app only |
+| Use for | testing pipeline/Argo changes before merging | fast iteration on manifests or code |
+
+`up.ps1` warns if you are in Argo mode with uncommitted or unpushed changes.
+
+### Access
+
+| UI | Command | URL |
+|---|---|---|
+| API | `kubectl -n healthqueue-local port-forward svc/healthqueue-api 18080:80` | http://localhost:18080/version |
+| Argo CD | `kubectl -n argocd port-forward svc/argocd-server 8080:80` | http://localhost:8080 (admin / printed by `up.ps1`) |
+| Grafana | `kubectl -n monitoring port-forward svc/kube-prometheus-stack-grafana 3000:80` | http://localhost:3000, dashboard "HealthQueue API - SLOs" |
+| Prometheus | `kubectl -n monitoring port-forward svc/kube-prometheus-stack-prometheus 9090:9090` | http://localhost:9090/alerts |
+| Alertmanager | `kubectl -n monitoring port-forward svc/kube-prometheus-stack-alertmanager 9093:9093` | http://localhost:9093 |
+
+### Watching an SLO alert fire
+
+1. `.\scripts\local\load.ps1 -Minutes 15 -ErrorPercent 20`. The local
+   overlay sets `CHAOS_ENABLED=true`, so `x-chaos: error` returns 503.
+2. In Grafana, the availability burn-rate panel climbs past 14.4x within
+   minutes.
+3. In Prometheus `/alerts`, `HealthQueueAvailabilityBudgetBurnFast` goes
+   pending, then firing, about 5 minutes in.
+4. Stop the load. The 5m short window drops below threshold, and the alert
+   resolves within minutes rather than hours. That is the point of the
+   multi-window design.
+
+Use `-SlowPercent 20` for the latency SLO instead.
+
+### How local differs from production
+
+| | Local | Production |
+|---|---|---|
+| Image | built in-node, unsigned | signed, SBOM-attested, SLSA L3 provenance |
+| Kyverno verify policy | installed, does not match `healthqueue-local` | enforced |
+| Replicas | 1 | 3 (HPA 3-10) |
+| Chaos hooks | enabled | disabled |
+| Argo CD Notifications to GitHub | off (no GitHub App) | on (feeds DORA) |
+| Tofu state | local file, unencrypted | remote, client-side encrypted |
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Docker is not running` | Start Docker Desktop, or `up.ps1 -Driver hyperv` from an elevated PowerShell |
+| `tofu apply` times out on kube-prometheus-stack | Not enough memory: `minikube delete -p healthqueue` then `up.ps1 -MemoryMb 10240` |
+| Argo CD app `healthqueue-local` stuck `Unknown` / repo errors | The repo is private or not pushed. Push it, add a repo credential in Argo CD, or use `-Mode Direct` |
+| Pod `ErrImageNeverPull` | The image was not built into this profile: re-run `up.ps1` (it rebuilds) |
+| `verify.ps1` reports the scrape target missing | Prometheus discovers new targets within about 1 minute. Re-run |
+| Port-forward fails with "address in use" | Another process holds the port: `Get-NetTCPConnection -LocalPort 18080` |
+| `kyverno test` warns that ClusterPolicy is deprecated | Expected on Kyverno 1.19; see ADR 0007 |

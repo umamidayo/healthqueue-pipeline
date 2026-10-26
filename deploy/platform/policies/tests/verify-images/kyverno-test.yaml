@@ -1,0 +1,18 @@
+# Schema/load test only: proves the policy parses under the pinned Kyverno
+# version and that the local namespace is exempt. Signature verification
+# itself needs Rekor + registry access and is exercised by the CI verify job.
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Test
+metadata:
+  name: verify-healthqueue-images-load
+policies:
+  - ../../verify-images.yaml
+resources:
+  - resources.yaml
+variables: ../values.yaml
+results:
+  - policy: verify-healthqueue-images
+    rule: verify-signature-provenance-sbom
+    resources: [p]
+    kind: Pod
+    result: skip

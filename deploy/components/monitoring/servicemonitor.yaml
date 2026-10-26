@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: healthqueue-api
+spec:
+  # Prometheus sets job=<service name> ("healthqueue-api"); the SLO rules
+  # select on that label.
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 5s

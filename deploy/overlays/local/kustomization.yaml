@@ -1,0 +1,47 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Local minikube environment. The image is built straight into the minikube
+# node by scripts/local/up.ps1, so it is never pulled or signed.
+namespace: healthqueue-local
+resources:
+  - ../../base
+components:
+  - ../../components/monitoring
+labels:
+  - pairs:
+      healthqueue.io/environment: local
+images:
+  - name: healthqueue-api
+    newName: healthqueue-api
+    newTag: local
+patches:
+  - target:
+      kind: Deployment
+      name: healthqueue-api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: CHAOS_ENABLED
+          value: "true"
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: BUILD_VERSION
+          value: local
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: healthqueue-api
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2

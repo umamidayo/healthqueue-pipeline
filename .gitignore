@@ -1,0 +1,7 @@
+# Local tool downloads (scripts/local/install-tools.ps1, scripts/ci/install-tools.sh)
+.tools/
+# DORA CLI default output directory
+dora-out/
+node_modules/
+.DS_Store
+Thumbs.db

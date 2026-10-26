@@ -1,0 +1,103 @@
+# promtool unit tests for the generated SLO rules.
+# Run: scripts/ci/validate-manifests.sh (CI) or scripts/check.ps1 (Windows).
+rule_files:
+  - slo-rules.yaml
+evaluation_interval: 1m
+
+tests:
+  # 9% of requests fail: ~18x the 0.5% budget. Must page within minutes.
+  - name: fast availability burn pages
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST",code="200"}'
+        values: '0+100x60'
+      - series: 'http_requests_total{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST",code="503"}'
+        values: '0+10x60'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HealthQueueAvailabilityBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              slo: availability
+              namespace: healthqueue-production
+            exp_annotations:
+              summary: "healthqueue-api availability SLO error budget is burning too fast in healthqueue-production"
+              description: "Proportion of /api requests that do not fail with a 5xx. Objective 99.5% over 30d. Burn condition: 14.4x over 1h/5m or 6x over 6h/30m."
+              runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/slo-burn-rate.md
+      - eval_time: 40m
+        alertname: HealthQueueAvailabilityBudgetBurnSlow
+        exp_alerts:
+          - exp_labels:
+              severity: ticket
+              slo: availability
+              namespace: healthqueue-production
+            exp_annotations:
+              summary: "healthqueue-api availability SLO error budget is burning too fast in healthqueue-production"
+              description: "Proportion of /api requests that do not fail with a 5xx. Objective 99.5% over 30d. Burn condition: 3x over 1d/2h or 1x over 3d/6h."
+              runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/slo-burn-rate.md
+
+  # Healthy traffic, including 4xx client errors, must never alert.
+  - name: client errors and healthy traffic stay silent
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST",code="200"}'
+        values: '0+100x60'
+      - series: 'http_requests_total{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST",code="400"}'
+        values: '0+50x60'
+      - series: 'http_request_duration_seconds_bucket{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST",le="0.3"}'
+        values: '0+150x60'
+      - series: 'http_request_duration_seconds_count{job="healthqueue-api",namespace="healthqueue-production",route="/api/v1/estimate",method="POST"}'
+        values: '0+150x60'
+    alert_rule_test:
+      - eval_time: 45m
+        alertname: HealthQueueAvailabilityBudgetBurnFast
+        exp_alerts: []
+      - eval_time: 45m
+        alertname: HealthQueueLatencyBudgetBurnFast
+        exp_alerts: []
+    promql_expr_test:
+      # The `or 0 * total` guard keeps the ratio at 0 instead of absent.
+      - expr: healthqueue_api:slo_availability_errors:ratio_rate5m
+        eval_time: 30m
+        exp_samples:
+          - labels: 'healthqueue_api:slo_availability_errors:ratio_rate5m{namespace="healthqueue-production",slo="availability"}'
+            value: 0
+
+  # 20% of requests slower than 300ms: 20x the 1% latency budget.
+  - name: slow responses page on latency
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{job="healthqueue-api",namespace="healthqueue-staging",route="/api/v1/estimate",method="POST",le="0.3"}'
+        values: '0+80x60'
+      - series: 'http_request_duration_seconds_count{job="healthqueue-api",namespace="healthqueue-staging",route="/api/v1/estimate",method="POST"}'
+        values: '0+100x60'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HealthQueueLatencyBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              slo: latency
+              namespace: healthqueue-staging
+            exp_annotations:
+              summary: "healthqueue-api latency SLO error budget is burning too fast in healthqueue-staging"
+              description: "Proportion of /api requests served in 300ms or less. Objective 99% over 30d. Burn condition: 14.4x over 1h/5m or 6x over 6h/30m."
+              runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/slo-burn-rate.md
+
+  - name: no scrape targets pages
+    interval: 1m
+    input_series:
+      - series: 'up{job="healthqueue-api",namespace="healthqueue-production",pod="a"}'
+        values: '0x15'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HealthQueueTargetDown
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              namespace: healthqueue-production
+            exp_annotations:
+              summary: "No healthqueue-api targets are up in healthqueue-production"
+              description: "Prometheus cannot scrape any API pod. SLO metrics are blind until this resolves."
+              runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/slo-burn-rate.md

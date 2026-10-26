@@ -1,0 +1,79 @@
+# Opens a pull request that promotes the build currently in staging to
+# production. Merging that PR (CODEOWNERS approval required) is the production
+# change gate; Argo CD deploys on merge. See docs/adr/0008-promotion-model.md.
+#
+# Re-verifies the image before opening the PR, so a reviewer only ever sees
+# promotions that the production admission policy will accept.
+name: promote
+
+on:
+  workflow_dispatch:
+  # Uncomment to keep a promotion PR always open with the latest staging
+  # build (recommended by the DORA toil report once staging soak is trusted).
+  # schedule:
+  #   - cron: "0 9-16 * * 1-5"
+
+permissions: {}
+
+concurrency:
+  group: promote-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24.22.1"
+  COSIGN_VERSION: "v3.1.4"
+
+jobs:
+  promote:
+    name: Open production promotion PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: staging
+        name: Read what staging runs
+        run: node scripts/ci/release-outputs.mjs
+      - name: Verify signature, SBOM and provenance
+        if: steps.staging.outputs.same != 'true'
+        env:
+          REF: ${{ steps.staging.outputs.ref }}
+        run: scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY" | tee verify.log
+      - name: Open the promotion PR
+        if: steps.staging.outputs.same != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          SOURCE: ${{ steps.staging.outputs.source }}
+          CURRENT: ${{ steps.staging.outputs.current }}
+          REF: ${{ steps.staging.outputs.ref }}
+        run: scripts/ci/open-promotion-pr.sh
+      - name: Nothing to promote
+        if: steps.staging.outputs.same == 'true'
+        run: echo "Production already runs the staging digest." >> "$GITHUB_STEP_SUMMARY"

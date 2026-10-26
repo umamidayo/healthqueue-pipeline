@@ -1,0 +1,58 @@
+prometheus:
+  prometheusSpec:
+    retention: ${retention}
+    # Select ServiceMonitors / PrometheusRules from every namespace, not only
+    # those labelled with this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+%{ if local_cluster ~}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 400Mi
+%{ endif ~}
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: ${local_cluster ? "10m" : "50m"}
+        memory: ${local_cluster ? "32Mi" : "128Mi"}
+  config:
+    route:
+      receiver: "null"
+      group_by: [alertname, namespace, slo]
+      routes:
+        # Wire these receivers to PagerDuty / Opsgenie / Slack per
+        # docs/observability.md. Locally they are inspected in the UI.
+        - receiver: page
+          matchers: ['severity = "page"']
+        - receiver: ticket
+          matchers: ['severity = "ticket"']
+    receivers:
+      - name: "null"
+      - name: page
+      - name: ticket
+
+grafana:
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+%{ if local_cluster ~}
+# Control-plane components on minikube are not scrapeable from inside the
+# cluster; disabling them avoids permanently-firing TargetDown alerts.
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+%{ endif ~}

@@ -1,0 +1,35 @@
+# Incidents are GitHub issues labelled "incident". The DORA collector uses them
+# for change fail rate and recovery time (docs/dora.md). Close the issue when
+# service is restored, not when the follow-ups are done.
+name: Incident
+description: Record a production incident (feeds DORA change fail rate and recovery time)
+labels: [incident]
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Add the matching sev label (sev1/sev2/sev3) after filing.
+      options: [sev1 - outage, sev2 - degraded, sev3 - minor]
+    validations:
+      required: true
+  - type: input
+    id: deployment
+    attributes:
+      label: Suspected deployment
+      description: >-
+        Write it as "Deployment: <GitHub deployment id or commit sha>".
+        Leave blank if unknown; the collector then attributes the incident to the
+        most recent production deployment within 24h.
+      placeholder: "Deployment: 3f2a9c1"
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who is affected and how? Which SLO is burning?
+    validations:
+      required: true
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline (UTC)

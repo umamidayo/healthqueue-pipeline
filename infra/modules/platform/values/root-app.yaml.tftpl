@@ -1,0 +1,37 @@
+applications:
+  root:
+    namespace: argocd
+    project: default
+    finalizers:
+      - resources-finalizer.argocd.argoproj.io
+    source:
+      repoURL: ${repo_url}
+      targetRevision: ${revision}
+      path: argocd/clusters/${cluster_name}
+      kustomize:
+        # Re-point every child Application and AppProject at the same repo and
+        # revision as the root, so a fork or feature branch can be tested end
+        # to end without editing the manifests in Git.
+        patches:
+          - target:
+              kind: Application
+            patch: |-
+              - op: replace
+                path: /spec/source/repoURL
+                value: ${repo_url}
+              - op: replace
+                path: /spec/source/targetRevision
+                value: ${revision}
+          - target:
+              kind: AppProject
+            patch: |-
+              - op: replace
+                path: /spec/sourceRepos
+                value: ["${repo_url}"]
+    destination:
+      server: https://kubernetes.default.svc
+      namespace: argocd
+    syncPolicy:
+      automated:
+        prune: true
+        selfHeal: true

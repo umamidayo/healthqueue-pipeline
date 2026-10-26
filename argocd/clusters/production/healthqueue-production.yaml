@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: healthqueue-production
+  namespace: argocd
+  labels:
+    healthqueue.io/environment: production
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    # Reports each successful sync to GitHub Deployments, the DORA source of truth
+    # (docs/adr/0009-dora-measurement.md).
+    notifications.argoproj.io/subscribe.on-deployed.github: ""
+    notifications.argoproj.io/subscribe.on-sync-failed.github: ""
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: healthqueue
+  source:
+    repoURL: https://github.com/umamidayo/healthqueue-pipeline.git
+    targetRevision: main
+    path: deploy/overlays/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: healthqueue-production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

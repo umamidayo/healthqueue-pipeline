@@ -1,0 +1,26 @@
+rule_files:
+  - argocd-rules.yaml
+evaluation_interval: 1m
+
+tests:
+  - name: degraded application pages after 10 minutes
+    interval: 1m
+    input_series:
+      - series: 'argocd_app_info{name="healthqueue-production",dest_namespace="healthqueue-production",health_status="Degraded",sync_status="Synced"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ArgoCDAppDegraded
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ArgoCDAppDegraded
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              name: healthqueue-production
+              dest_namespace: healthqueue-production
+              health_status: Degraded
+            exp_annotations:
+              summary: "Argo CD application healthqueue-production is Degraded"
+              description: "Workloads managed by healthqueue-production have been unhealthy for 10 minutes."
+              runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/rollback.md

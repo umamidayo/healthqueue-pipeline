@@ -1,0 +1,384 @@
+{
+  "metrics": {
+    "window": {
+      "start": "2026-07-27T00:00:00.000Z",
+      "end": "2026-10-25T00:00:00.000Z",
+      "days": 90
+    },
+    "overall": {
+      "deploymentFrequency": {
+        "deployments": 62,
+        "attempted": 64,
+        "perDay": 0.6888888888888889,
+        "perWeek": 4.822222222222222,
+        "activeDays": 55,
+        "band": "high"
+      },
+      "leadTime": {
+        "changes": 499,
+        "p50Hours": 46.07794527777778,
+        "p90Hours": 90.2547137222222,
+        "medianBatchSize": 8,
+        "band": "high"
+      },
+      "changeFailRate": {
+        "failed": 4,
+        "total": 64,
+        "rate": 0.0625,
+        "band": "high"
+      },
+      "recoveryTime": {
+        "samples": 5,
+        "p50Hours": 0.896985,
+        "p90Hours": 3.1476542222222226,
+        "band": "elite"
+      },
+      "reworkRate": {
+        "rework": 1,
+        "total": 62,
+        "rate": 0.016129032258064516
+      },
+      "incidents": {
+        "total": 3,
+        "attributed": 3,
+        "open": 0
+      }
+    },
+    "weekly": [
+      {
+        "weekStart": "2026-07-27",
+        "deployments": 4,
+        "leadTimeP50Hours": 46.37729847222222,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-08-03",
+        "deployments": 5,
+        "leadTimeP50Hours": 48.42793,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-08-10",
+        "deployments": 4,
+        "leadTimeP50Hours": 47.075918611111106,
+        "failed": 1,
+        "changeFailRate": 0.2,
+        "recoveryP50Hours": 0.27311944444444447
+      },
+      {
+        "weekStart": "2026-08-17",
+        "deployments": 6,
+        "leadTimeP50Hours": 43.75615888888889,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-08-24",
+        "deployments": 7,
+        "leadTimeP50Hours": 47.63314805555556,
+        "failed": 2,
+        "changeFailRate": 0.2857142857142857,
+        "recoveryP50Hours": 0.9854755555555555
+      },
+      {
+        "weekStart": "2026-08-31",
+        "deployments": 4,
+        "leadTimeP50Hours": 46.26686958333333,
+        "failed": 1,
+        "changeFailRate": 0.2,
+        "recoveryP50Hours": 0.896985
+      },
+      {
+        "weekStart": "2026-09-07",
+        "deployments": 4,
+        "leadTimeP50Hours": 47.065800277777775,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-09-14",
+        "deployments": 5,
+        "leadTimeP50Hours": 47.34300472222222,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-09-21",
+        "deployments": 4,
+        "leadTimeP50Hours": 47.742711666666665,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-09-28",
+        "deployments": 4,
+        "leadTimeP50Hours": 41.284285555555556,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-10-05",
+        "deployments": 4,
+        "leadTimeP50Hours": 50.908876388888885,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-10-12",
+        "deployments": 7,
+        "leadTimeP50Hours": 44.163841250000004,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      },
+      {
+        "weekStart": "2026-10-19",
+        "deployments": 4,
+        "leadTimeP50Hours": 39.503431388888885,
+        "failed": 0,
+        "changeFailRate": 0,
+        "recoveryP50Hours": null
+      }
+    ],
+    "comparison": {
+      "first30": {
+        "deploymentFrequency": {
+          "deployments": 22,
+          "attempted": 23,
+          "perDay": 0.7333333333333333,
+          "perWeek": 5.133333333333333,
+          "activeDays": 19,
+          "band": "high"
+        },
+        "leadTime": {
+          "changes": 164,
+          "p50Hours": 47.235192222222224,
+          "p90Hours": 92.26560358333337,
+          "medianBatchSize": 7,
+          "band": "high"
+        },
+        "changeFailRate": {
+          "failed": 2,
+          "total": 23,
+          "rate": 0.08695652173913043,
+          "band": "high"
+        },
+        "recoveryTime": {
+          "samples": 2,
+          "p50Hours": 0.5513318055555556,
+          "p90Hours": 0.7739016944444445,
+          "band": "elite"
+        },
+        "reworkRate": {
+          "rework": 1,
+          "total": 22,
+          "rate": 0.045454545454545456
+        },
+        "incidents": {
+          "total": 1,
+          "attributed": 1,
+          "open": 0
+        }
+      },
+      "last30": {
+        "deploymentFrequency": {
+          "deployments": 19,
+          "attempted": 19,
+          "perDay": 0.6333333333333333,
+          "perWeek": 4.433333333333334,
+          "activeDays": 17,
+          "band": "high"
+        },
+        "leadTime": {
+          "changes": 141,
+          "p50Hours": 41.8845975,
+          "p90Hours": 89.51440944444444,
+          "medianBatchSize": 8,
+          "band": "high"
+        },
+        "changeFailRate": {
+          "failed": 0,
+          "total": 19,
+          "rate": 0,
+          "band": "elite"
+        },
+        "recoveryTime": {
+          "samples": 0,
+          "p50Hours": null,
+          "p90Hours": null,
+          "band": null
+        },
+        "reworkRate": {
+          "rework": 0,
+          "total": 19,
+          "rate": 0
+        },
+        "incidents": {
+          "total": 0,
+          "attributed": 0,
+          "open": 0
+        }
+      }
+    }
+  },
+  "toil": {
+    "signals": {
+      "months": 3,
+      "runs": 634,
+      "rerunRate": 0.07413249211356467,
+      "rerunsPerMonth": 15.666666666666666,
+      "prCiP50Minutes": 8.258841666666667,
+      "prCiP90Minutes": 16.059891666666665,
+      "prRunsPerMonth": 142,
+      "mainToStagingP90Minutes": 25.059481666666667,
+      "reviewWaitP50Hours": 4.306431388888889,
+      "reviewWaitP90Hours": 16.056504750000002,
+      "humanPrsPerMonth": 69.33333333333333,
+      "botPrsPerMonth": 26,
+      "promotionWaitP50Hours": 12.453051111111112,
+      "promotionsPerMonth": 20.666666666666668,
+      "batchSizeMedian": 8,
+      "changeFailRate": 0.0625,
+      "recoveryP50Hours": 0.896985,
+      "reworkRate": 0.016129032258064516,
+      "incidentPersonHoursPerMonth": 4.269417592592593
+    },
+    "recommendations": [
+      {
+        "id": "slow-pr-feedback",
+        "category": "flow",
+        "title": "Shorten pull-request CI feedback",
+        "priority": "P2",
+        "evidence": "PR CI p90 is 16.1 min (p50 8.3); pipeline SLO is p90 <= 10 min.",
+        "toilHoursPerMonth": 3.585435902777777,
+        "leadTimeHoursSaved": 14.341743611111108,
+        "effort": "M",
+        "actions": [
+          "Run independent jobs in parallel (already the default layout in ci.yml) and keep the critical path to test -> build.",
+          "Cache the Docker build (type=gha cache is configured) and the OpenTofu provider plugins.",
+          "Skip image build/SBOM/scan on PRs that only touch docs (paths filter) while keeping required checks green."
+        ],
+        "score": 2.509805131944444
+      },
+      {
+        "id": "dependency-pr-toil",
+        "category": "toil",
+        "title": "Auto-merge low-risk dependency updates",
+        "priority": "P2",
+        "evidence": "26.0 bot PRs merged per month, each reviewed by hand.",
+        "toilHoursPerMonth": 2.1666666666666665,
+        "effort": "S",
+        "actions": [
+          "Group Dependabot updates per ecosystem (configured in .github/dependabot.yml) to cut PR count.",
+          "Enable auto-merge for patch/minor updates of GitHub Actions and base-image digests when all required checks pass.",
+          "Keep majors and Helm chart bumps manual; they change behaviour."
+        ],
+        "score": 2.1666666666666665
+      },
+      {
+        "id": "review-latency",
+        "category": "flow",
+        "title": "Reduce time waiting for first review",
+        "priority": "P2",
+        "evidence": "Median time to first review is 4.3h (p90 16.1h); target <= 4h.",
+        "leadTimeHoursSaved": 21.245909629629637,
+        "effort": "S",
+        "actions": [
+          "Agree a team review SLO (e.g. first response within 4 working hours) and make the queue visible in standup.",
+          "Keep PRs small: the median batch per deploy is a leading indicator of review size.",
+          "Use CODEOWNERS with a rotation/team alias instead of individual reviewers."
+        ],
+        "score": 2.1245909629629636
+      },
+      {
+        "id": "flaky-ci",
+        "category": "toil",
+        "title": "Quarantine and fix flaky CI jobs",
+        "priority": "P2",
+        "evidence": "7.4% of workflow runs were manually re-run (15.7/month); target <= 5%.",
+        "toilHoursPerMonth": 3.9166666666666665,
+        "effort": "M",
+        "actions": [
+          "Tag re-run jobs automatically (run_attempt > 1) and review the top offenders weekly.",
+          "Move tests that fail non-deterministically into a non-blocking quarantine job with an owner and an expiry date.",
+          "Replace sleeps/timing assertions with deterministic waits; the reference app tests bind port 0 for this reason."
+        ],
+        "score": 1.9583333333333333
+      },
+      {
+        "id": "slow-recovery",
+        "category": "stability",
+        "title": "Make rollback a one-step, rehearsed action",
+        "priority": "P3",
+        "evidence": "Median failed-deployment recovery time is 0.9h; target <= 1h.",
+        "toilHoursPerMonth": 2.1347087962962963,
+        "effort": "M",
+        "actions": [
+          "Follow docs/runbooks/rollback.md: revert the promotion commit; Argo CD restores the previous digest in minutes.",
+          "Page on burn rate (already configured) rather than on symptoms reported by users.",
+          "Rehearse the rollback in staging once per sprint; time it."
+        ],
+        "score": 1.0673543981481481
+      },
+      {
+        "id": "large-batches",
+        "category": "flow",
+        "title": "Ship smaller batches",
+        "priority": "P3",
+        "evidence": "Median 8 human commits per production deployment; target <= 10.",
+        "effort": "M",
+        "leadTimeHoursSaved": 0,
+        "actions": [
+          "Promote more often; batch size falls automatically when promotion is cheap (see manual-promotion).",
+          "Use feature flags to merge incomplete work dark instead of holding long-lived branches."
+        ],
+        "score": 0
+      },
+      {
+        "id": "slow-main-to-staging",
+        "category": "flow",
+        "title": "Speed up merge-to-staging",
+        "priority": "P3",
+        "evidence": "Merge -> staging p90 is 25.1 min; pipeline SLO is <= 30 min.",
+        "leadTimeHoursSaved": -1.7017340925925928,
+        "effort": "S",
+        "actions": [
+          "Lower Argo CD reconciliation (timeout.reconciliation) or add a GitHub webhook to Argo CD so syncs start on push rather than on poll.",
+          "Check the slsa-github-generator and verify jobs for registry rate limiting; they run serially after build."
+        ],
+        "score": -0.17017340925925928
+      }
+    ],
+    "totals": {
+      "toilHoursPerMonth": 6.083333333333333
+    },
+    "costs": {
+      "rerunMinutes": 15,
+      "promotionMinutes": 10,
+      "botPrMinutes": 5,
+      "incidentResponders": 2,
+      "waitAttentionFactor": 0.25
+    },
+    "targets": {
+      "rerunRate": 0.05,
+      "prCiP90Minutes": 10,
+      "mainToStagingP90Minutes": 30,
+      "reviewWaitP50Hours": 4,
+      "promotionWaitP50Hours": 24,
+      "batchSizeMedian": 10,
+      "changeFailRate": 0.15,
+      "recoveryP50Hours": 1,
+      "reworkRate": 0.1
+    }
+  }
+}

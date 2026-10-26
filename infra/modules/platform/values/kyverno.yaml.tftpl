@@ -1,0 +1,24 @@
+admissionController:
+  replicas: ${replicas}
+  serviceMonitor:
+    enabled: ${monitoring}
+backgroundController:
+  replicas: ${replicas > 1 ? 2 : 1}
+  serviceMonitor:
+    enabled: ${monitoring}
+cleanupController:
+  replicas: ${replicas > 1 ? 2 : 1}
+  serviceMonitor:
+    enabled: ${monitoring}
+reportsController:
+  replicas: ${replicas > 1 ? 2 : 1}
+  serviceMonitor:
+    enabled: ${monitoring}
+config:
+  # Never let a policy outage take down the platform itself.
+  webhooks:
+    - namespaceSelector:
+        matchExpressions:
+          - key: kubernetes.io/metadata.name
+            operator: NotIn
+            values: [kube-system, kyverno, argocd, monitoring]

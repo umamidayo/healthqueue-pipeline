@@ -1,0 +1,9 @@
+# Changes to what runs in production, to cluster-wide policy, to platform IaC
+# and to the pipeline itself require review from the platform owners.
+# Replace @umamidayo with a team (e.g. @org/platform) in a real organization.
+*                               @umamidayo
+/deploy/overlays/production/    @umamidayo
+/deploy/platform/               @umamidayo
+/infra/                         @umamidayo
+/.github/                       @umamidayo
+/argocd/                        @umamidayo

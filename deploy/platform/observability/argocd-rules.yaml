@@ -1,0 +1,40 @@
+# Delivery-path alerts. These protect the "deploy" half of the pipeline SLOs
+# in docs/observability.md: a change that merges but never reaches the
+# cluster is a silent failure that DORA metrics only surface days later.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-delivery
+spec:
+  groups:
+    - name: argocd-delivery
+      rules:
+        - alert: ArgoCDAppDegraded
+          expr: |
+            max by (name, dest_namespace, health_status) (argocd_app_info{health_status=~"Degraded|Missing"}) == 1
+          for: 10m
+          labels:
+            severity: page
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} is {{ $labels.health_status }}"
+            description: "Workloads managed by {{ $labels.name }} have been unhealthy for 10 minutes."
+            runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/rollback.md
+        - alert: ArgoCDAppOutOfSync
+          expr: |
+            max by (name, dest_namespace) (argocd_app_info{sync_status="OutOfSync"}) == 1
+          for: 30m
+          labels:
+            severity: ticket
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} has been OutOfSync for 30 minutes"
+            description: "Git and the cluster disagree. Either auto-sync is failing or someone changed the cluster by hand."
+            runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/rollback.md
+        - alert: ArgoCDSyncFailing
+          expr: |
+            sum by (name) (increase(argocd_app_sync_total{phase=~"Error|Failed"}[30m])) > 2
+          labels:
+            severity: ticket
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} failed to sync more than twice in 30 minutes"
+            description: "Repeated sync failures usually mean an invalid manifest or an admission policy rejection (check Kyverno PolicyReports)."
+            runbook_url: https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/rollback.md

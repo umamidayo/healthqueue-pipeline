@@ -1,0 +1,377 @@
+# Continuous integration and delivery to staging.
+#
+#   PR / merge queue : test, validate manifests + IaC, build image, SBOM, scan
+#   push to main     : all of the above, then push, sign, SBOM attestation,
+#                      SLSA L3 provenance, verify, and promote to staging (GitOps)
+#
+# Every third-party action is pinned to a full commit SHA (the tag is in the
+# trailing comment for Dependabot and humans). The one exception is the SLSA
+# generator, which must be referenced by tag so it can verify its own identity.
+# Design and trade-offs: docs/pipeline.md, docs/adr/0002-github-actions-hardening.md.
+name: ci
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Deny by default; every job asks for exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # Never cancel main: a half-finished run could leave a pushed but unsigned image.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: "24.22.1"
+  TOFU_VERSION: "1.13.0"
+  COSIGN_VERSION: "v3.1.4"
+  IMAGE_NAME: healthqueue-api
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      app: ${{ steps.diff.outputs.app }}
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        name: Did the image inputs change?
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # PRs always build (the build is a required check); pushes to main
+          # only rebuild and promote when the image would actually change.
+          if [ "$EVENT" != "push" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "app=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BEFORE" "$GITHUB_SHA" | grep -qE '^(app/|\.github/workflows/ci\.yml$)'; then
+            echo "app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "app=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: App - install, lint, test with coverage gate
+        working-directory: app
+        run: |
+          npm ci --ignore-scripts
+          npm run lint
+          npm run test:ci
+      - name: Promotion script tests
+        run: node --test "scripts/test/*.test.mjs"
+      - name: DORA toolkit tests
+        working-directory: dora
+        run: npm test
+      - name: SLO rules match their spec
+        run: node scripts/gen-slo-rules.mjs --check
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-results
+          path: app/test-results.xml
+          retention-days: 14
+
+  manifests:
+    name: Validate manifests and policies
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned, checksum-verified tools
+        run: scripts/ci/install-tools.sh
+      - name: Render and validate (kubeconform, promtool, kyverno)
+        run: scripts/ci/validate-manifests.sh
+      - name: Lint workflows
+        run: actionlint -color
+
+  iac:
+    name: Validate OpenTofu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+          tofu_wrapper: false
+      - run: tofu fmt -check -recursive -diff infra
+      - name: Validate each root module against its committed lock file
+        run: |
+          for env in infra/envs/*/; do
+            echo "::group::$env"
+            tofu -chdir="$env" init -backend=false -input=false -lockfile=readonly
+            tofu -chdir="$env" validate
+            echo "::endgroup::"
+          done
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-3.0-only, AGPL-3.0-or-later, GPL-3.0-only, GPL-3.0-or-later
+
+  build:
+    name: Build, SBOM, scan, sign
+    needs: [changes, test, manifests, iac]
+    if: needs.changes.outputs.app == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write # push to GHCR (main only; login is skipped on PRs)
+      id-token: write # Sigstore keyless signing (main only)
+      security-events: write # upload scan results to code scanning
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+      pushed: ${{ steps.vars.outputs.push }}
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: vars
+        name: Compute build variables
+        env:
+          OWNER: ${{ github.repository_owner }}
+          PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        run: |
+          echo "image=ghcr.io/${OWNER,,}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "push=${PUSH}" >> "$GITHUB_OUTPUT"
+          # Reproducibility: timestamps in the image derive from the commit.
+          echo "source_date_epoch=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./app/package.json").version')+${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        if: steps.vars.outputs.push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          # Immutable tags only. Deployments reference the digest regardless.
+          tags: |
+            type=sha,format=long
+          labels: |
+            org.opencontainers.image.title=healthqueue-api
+            org.opencontainers.image.version=${{ steps.vars.outputs.version }}
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        env:
+          SOURCE_DATE_EPOCH: ${{ steps.vars.outputs.source_date_epoch }}
+        with:
+          context: app
+          push: ${{ steps.vars.outputs.push == 'true' }}
+          load: ${{ steps.vars.outputs.push != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BUILD_VERSION=${{ steps.vars.outputs.version }}
+            BUILD_REVISION=${{ github.sha }}
+          # BuildKit's own attestations are disabled: SBOM and provenance are
+          # produced, signed and verified explicitly below (ADR 0006/0007).
+          provenance: false
+          sbom: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - id: ref
+        name: Resolve the reference to scan
+        env:
+          PUSH: ${{ steps.vars.outputs.push }}
+          IMAGE: ${{ steps.vars.outputs.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          if [ "$PUSH" = "true" ]; then echo "ref=${IMAGE}@${DIGEST}"; else echo "ref=${IMAGE}:sha-${GITHUB_SHA}"; fi >> "$GITHUB_OUTPUT"
+
+      - name: SBOM (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.ref.outputs.ref }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+      - name: SBOM (CycloneDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          image: ${{ steps.ref.outputs.ref }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+      - id: scan
+        name: Vulnerability gate (Grype, from SBOM)
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          fail-build: true
+          severity-cutoff: high
+          only-fixed: true
+          output-format: sarif
+      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        if: always() && steps.scan.outputs.sarif != '' && github.event.pull_request.head.repo.fork != true
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
+          category: container-image
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom
+          path: sbom.*.json
+          retention-days: 90
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: steps.vars.outputs.push == 'true'
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign image and attest SBOM (Sigstore keyless)
+        if: steps.vars.outputs.push == 'true'
+        env:
+          REF: ${{ steps.ref.outputs.ref }}
+        run: |
+          # Legacy (tag-based) signature format keeps our signatures in the
+          # same format as the SLSA generator's provenance, which Kyverno's
+          # ClusterPolicy verifies. See ADR 0007 for the migration plan.
+          FLAGS=(--yes --new-bundle-format=false --use-signing-config=false)
+          cosign sign "${FLAGS[@]}" "$REF"
+          cosign attest "${FLAGS[@]}" --type cyclonedx --predicate sbom.cdx.json "$REF"
+
+  provenance:
+    name: SLSA provenance (L3)
+    needs: build
+    if: needs.build.outputs.pushed == 'true'
+    permissions:
+      actions: read # read the workflow run to build provenance
+      id-token: write # sign the provenance
+      packages: write # attach it to the image
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  verify:
+    name: Verify signature, SBOM and provenance
+    needs: [build, provenance]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify (same checks as the Kyverno admission policy)
+        env:
+          REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+        run: scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY"
+
+  promote-staging:
+    name: Promote to staging (GitOps)
+    needs: [build, verify]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read # the push itself uses the release bot's token
+    concurrency:
+      group: promote-staging
+      cancel-in-progress: false
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      # A GitHub App token (not GITHUB_TOKEN) so the push can bypass the main
+      # ruleset and so Argo CD / downstream workflows see a real actor.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Update the staging overlay and push
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+          IMAGE: ${{ needs.build.outputs.image }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: scripts/ci/promote-staging.sh

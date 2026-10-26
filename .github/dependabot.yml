@@ -1,0 +1,42 @@
+# Keeps every pin moving: action SHAs, base-image digests, npm lockfiles and
+# OpenTofu providers. Updates are grouped to keep PR toil low (see the DORA
+# report's "dependency-pr-toil" signal). Helm chart versions in
+# infra/modules/platform/variables.tf are not covered; see docs/operations.md.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
+  - package-ecosystem: docker
+    directory: /app
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "build"
+
+  - package-ecosystem: npm
+    directories: ["/app", "/dora"]
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: terraform
+    directories: ["/infra/envs/local", "/infra/envs/production", "/infra/modules/platform"]
+    schedule:
+      interval: monthly
+    groups:
+      providers:
+        patterns: ["*"]
+    commit-message:
+      prefix: "infra"

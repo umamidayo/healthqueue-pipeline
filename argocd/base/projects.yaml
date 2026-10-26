@@ -1,0 +1,44 @@
+# Tenancy boundary for the application. Applications in this project can only
+# deploy from this repository into healthqueue-* namespaces, and can create no
+# cluster-scoped objects other than their own Namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: healthqueue
+  namespace: argocd
+spec:
+  description: HealthQueue API environments
+  sourceRepos:
+    - https://github.com/umamidayo/healthqueue-pipeline.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: healthqueue-*
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+  namespaceResourceBlacklist:
+    # Workloads never get to grant themselves RBAC.
+    - group: rbac.authorization.k8s.io
+      kind: "*"
+  orphanedResources:
+    warn: true
+---
+# Platform components (admission policies, platform alerts). Separate project
+# so that application owners cannot change cluster-wide policy.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Cluster-wide platform configuration
+  sourceRepos:
+    - https://github.com/umamidayo/healthqueue-pipeline.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: monitoring
+    - server: https://kubernetes.default.svc
+      namespace: kyverno
+  clusterResourceWhitelist:
+    - group: kyverno.io
+      kind: ClusterPolicy

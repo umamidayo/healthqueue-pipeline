@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Staging. CI updates the image digest below automatically after every
+# verified build of main (scripts/promote.mjs). Do not hand-edit the digest.
+namespace: healthqueue-staging
+resources:
+  - ../../base
+components:
+  - ../../components/monitoring
+labels:
+  - pairs:
+      healthqueue.io/environment: staging
+images:
+  - name: healthqueue-api
+    newName: ghcr.io/umamidayo/healthqueue-api
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

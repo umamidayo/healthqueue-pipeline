@@ -1,0 +1,22 @@
+{
+  "$comment": "Source of truth for service SLOs. Run `node scripts/gen-slo-rules.mjs` after editing; CI fails if deploy/components/monitoring/slo-rules.yaml is stale. Rationale: docs/observability.md and docs/adr/0010-slo-burn-rate-alerting.md.",
+  "service": "healthqueue-api",
+  "windowDays": 30,
+  "runbookUrl": "https://github.com/umamidayo/healthqueue-pipeline/blob/main/docs/runbooks/slo-burn-rate.md",
+  "slos": [
+    {
+      "name": "availability",
+      "objective": 99.5,
+      "description": "Proportion of /api requests that do not fail with a 5xx.",
+      "errorQuery": "sum by (namespace) (rate(http_requests_total{job=\"healthqueue-api\",route=~\"/api/.*\",code=~\"5..\"}[$window]))",
+      "totalQuery": "sum by (namespace) (rate(http_requests_total{job=\"healthqueue-api\",route=~\"/api/.*\"}[$window]))"
+    },
+    {
+      "name": "latency",
+      "objective": 99.0,
+      "description": "Proportion of /api requests served in 300ms or less.",
+      "errorQuery": "sum by (namespace) (rate(http_request_duration_seconds_count{job=\"healthqueue-api\",route=~\"/api/.*\"}[$window])) - sum by (namespace) (rate(http_request_duration_seconds_bucket{job=\"healthqueue-api\",route=~\"/api/.*\",le=\"0.3\"}[$window]))",
+      "totalQuery": "sum by (namespace) (rate(http_request_duration_seconds_count{job=\"healthqueue-api\",route=~\"/api/.*\"}[$window]))"
+    }
+  ]
+}

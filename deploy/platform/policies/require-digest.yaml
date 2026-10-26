@@ -1,0 +1,35 @@
+# Defence in depth for the verify policy: in staging and production, every
+# container must come from this project's registry namespace and be referenced
+# by an immutable digest. Tags (including :latest) are rejected.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-trusted-digest-images
+  annotations:
+    policies.kyverno.io/title: Require trusted registry and image digests
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+spec:
+  background: true
+  rules:
+    - name: trusted-registry-and-digest
+      match:
+        any:
+          - resources:
+              kinds: ["Pod"]
+              namespaceSelector:
+                matchExpressions:
+                  - key: healthqueue.io/environment
+                    operator: In
+                    values: ["staging", "production"]
+      validate:
+        failureAction: Enforce
+        message: "Images must be ghcr.io/umamidayo/* and pinned by @sha256 digest."
+        pattern:
+          spec:
+            =(initContainers):
+              - image: "ghcr.io/umamidayo/*@sha256:*"
+            =(ephemeralContainers):
+              - image: "ghcr.io/umamidayo/*@sha256:*"
+            containers:
+              - image: "ghcr.io/umamidayo/*@sha256:*"

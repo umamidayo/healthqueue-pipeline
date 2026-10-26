@@ -1,0 +1,49 @@
+# Daily DORA metrics + toil report over a rolling window (max 90 days).
+# The report lands in the run summary; JSON + markdown are kept as an artifact
+# for 90 days, so any day in the last quarter can be reproduced.
+name: dora
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: Window in days (1-90)
+        required: false
+        default: "90"
+
+permissions: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.22.1"
+      - name: Collect and report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Passed via env (never interpolated into the script) to avoid
+          # expression injection; the CLI validates and caps it at 90.
+          DAYS: ${{ inputs.days || '90' }}
+        run: node dora/cli.mjs collect --repo "$GITHUB_REPOSITORY" --days "$DAYS" --out dora-out --summary
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dora-report-${{ github.run_id }}
+          path: dora-out/
+          retention-days: 90

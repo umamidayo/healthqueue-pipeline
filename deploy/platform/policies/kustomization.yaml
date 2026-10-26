@@ -1,0 +1,7 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Cluster-wide admission policies, enforced by Kyverno (installed by OpenTofu).
+# See docs/supply-chain-security.md for what each policy defends against.
+resources:
+  - verify-images.yaml
+  - require-digest.yaml

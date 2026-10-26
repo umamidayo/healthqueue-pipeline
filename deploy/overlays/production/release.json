@@ -1,0 +1,8 @@
+{
+  "$comment": "Written by scripts/promote.mjs. Not a Kubernetes resource: records which source commit the pinned digest was built from, so DORA lead time can be measured exactly (docs/dora.md).",
+  "environment": "production",
+  "image": "ghcr.io/umamidayo/healthqueue-api",
+  "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "sourceRevision": null,
+  "promotedAt": null
+}

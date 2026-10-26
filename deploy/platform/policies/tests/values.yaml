@@ -1,0 +1,11 @@
+apiVersion: cli.kyverno.io/v1alpha1
+kind: Values
+metadata:
+  name: values
+namespaceSelector:
+  - name: healthqueue-production
+    labels:
+      healthqueue.io/environment: production
+  - name: healthqueue-local
+    labels:
+      healthqueue.io/environment: local

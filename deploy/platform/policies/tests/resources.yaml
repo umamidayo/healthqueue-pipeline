@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata: {name: good-digest, namespace: healthqueue-production}
+spec:
+  containers:
+    - {name: api, image: "ghcr.io/umamidayo/healthqueue-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: bad-tag, namespace: healthqueue-production}
+spec:
+  containers:
+    - {name: api, image: "ghcr.io/umamidayo/healthqueue-api:latest"}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: bad-registry, namespace: healthqueue-production}
+spec:
+  containers:
+    - {name: api, image: "docker.io/library/nginx@sha256:1111111111111111111111111111111111111111111111111111111111111111"}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: bad-init-container, namespace: healthqueue-production}
+spec:
+  initContainers:
+    - {name: init, image: "busybox:1.36"}
+  containers:
+    - {name: api, image: "ghcr.io/umamidayo/healthqueue-api@sha256:1111111111111111111111111111111111111111111111111111111111111111"}
+---
+apiVersion: v1
+kind: Pod
+metadata: {name: local-unmatched, namespace: healthqueue-local}
+spec:
+  containers:
+    - {name: api, image: "healthqueue-api:local"}

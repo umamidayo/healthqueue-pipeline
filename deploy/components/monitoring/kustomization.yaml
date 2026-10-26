@@ -1,0 +1,16 @@
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+# Opt-in Prometheus Operator integration. Requires the monitoring.coreos.com
+# CRDs (installed locally by OpenTofu via kube-prometheus-stack).
+resources:
+  - servicemonitor.yaml
+  - slo-rules.yaml
+configMapGenerator:
+  - name: healthqueue-dashboard
+    files:
+      - healthqueue-slo.json=dashboard.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        # Picked up by the Grafana dashboard sidecar in kube-prometheus-stack.
+        grafana_dashboard: "1"
