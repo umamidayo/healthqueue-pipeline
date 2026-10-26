@@ -11,7 +11,8 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 fetch() { # name url sha256
-  local name="$1" url="$2" sum="$3" file="$tmp/$(basename "$2")"
+  local name="$1" url="$2" sum="$3" file
+  file="$tmp/$(basename "$2")"
   curl -fsSL --retry 3 -o "$file" "$url"
   echo "$sum  $file" | sha256sum -c --quiet - || { echo "checksum mismatch for $name" >&2; exit 1; }
   echo "$file"

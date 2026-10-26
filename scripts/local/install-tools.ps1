@@ -21,7 +21,13 @@ $tools = @(
     @{ Name = 'kyverno.exe'; Sha = 'c787cd56d2c2571e5470b1d070fff851c05d104513fcf5cb1652021bb187a1f6'
        Url = 'https://github.com/kyverno/kyverno/releases/download/v1.19.2/kyverno-cli_v1.19.2_windows_x86_64.zip' },
     @{ Name = 'actionlint.exe'; Sha = '6e7241b51e6817ea6a047693d8e6fed13b31819c9a0dd6c5a726e1592d22f6e9'
-       Url = 'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip' }
+       Url = 'https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_windows_amd64.zip' },
+    # GitHub's Ubuntu runners ship shellcheck and actionlint uses it to lint
+    # every `run:` block; without it locally, those findings only appear in CI.
+    # ShellCheck publishes no checksum file; this hash was recorded from the
+    # v0.11.0 GitHub release asset.
+    @{ Name = 'shellcheck.exe'; Sha = '8a4e35ab0b331c85d73567b12f2a444df187f483e5079ceffa6bda1faa2e740e'
+       Url = 'https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.zip' }
 )
 
 try {

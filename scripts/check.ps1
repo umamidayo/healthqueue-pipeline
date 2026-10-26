@@ -85,7 +85,18 @@ if (Test-Path (Join-Path $tools 'kubeconform.exe')) {
         try { Invoke-Native (Join-Path $tools 'promtool.exe') @('test', 'rules', 'slo-alerts.test.yaml', 'argocd-alerts.test.yaml') } finally { Pop-Location }
     }
     Step 'kyverno policy tests' { Invoke-Native (Join-Path $tools 'kyverno.exe') @('test', 'deploy/platform/policies/tests') }
-    Step 'actionlint' { Invoke-Native (Join-Path $tools 'actionlint.exe') @('-no-color') }
+    # actionlint shells out to shellcheck (if on PATH) for every `run:` block,
+    # exactly as on GitHub's runners, where shellcheck is preinstalled.
+    $env:PATH = "$tools;$env:PATH"
+    if (-not (Test-Path (Join-Path $tools 'shellcheck.exe'))) {
+        Write-Warn2 'shellcheck.exe missing: re-run install-tools.ps1, or actionlint here will be weaker than in CI.'
+    }
+    Step 'actionlint (+ shellcheck on run: blocks)' { Invoke-Native (Join-Path $tools 'actionlint.exe') @('-no-color') }
+    if (Test-Path (Join-Path $tools 'shellcheck.exe')) {
+        Step 'shellcheck scripts/ci' {
+            Invoke-Native (Join-Path $tools 'shellcheck.exe') (@('-f', 'gcc') + (Get-ChildItem scripts/ci -Filter *.sh).FullName)
+        }
+    }
 } else {
     Write-Warn2 'Schema, PromQL, policy and workflow checks skipped: run .\scripts\local\install-tools.ps1 once to enable them.'
 }
