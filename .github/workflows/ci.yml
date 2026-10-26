@@ -114,9 +114,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install pinned, checksum-verified tools
-        run: scripts/ci/install-tools.sh
+        run: bash scripts/ci/install-tools.sh
       - name: Render and validate (kubeconform, promtool, kyverno)
-        run: scripts/ci/validate-manifests.sh
+        run: bash scripts/ci/validate-manifests.sh
       - name: Lint workflows
         run: actionlint -color
 
@@ -335,7 +335,7 @@ jobs:
       - name: Verify (same checks as the Kyverno admission policy)
         env:
           REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
-        run: scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY"
+        run: bash scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY"
 
   promote-staging:
     name: Promote to staging (GitOps)
@@ -374,4 +374,4 @@ jobs:
           IMAGE: ${{ needs.build.outputs.image }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: scripts/ci/promote-staging.sh
+        run: bash scripts/ci/promote-staging.sh

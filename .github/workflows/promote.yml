@@ -64,7 +64,10 @@ jobs:
         if: steps.staging.outputs.same != 'true'
         env:
           REF: ${{ steps.staging.outputs.ref }}
-        run: scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY" | tee verify.log
+        run: |
+          # Without pipefail, tee would mask a failed verification and the PR would still open.
+          set -o pipefail
+          bash scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY" | tee verify.log
       - name: Open the promotion PR
         if: steps.staging.outputs.same != 'true'
         env:
@@ -73,7 +76,7 @@ jobs:
           SOURCE: ${{ steps.staging.outputs.source }}
           CURRENT: ${{ steps.staging.outputs.current }}
           REF: ${{ steps.staging.outputs.ref }}
-        run: scripts/ci/open-promotion-pr.sh
+        run: bash scripts/ci/open-promotion-pr.sh
       - name: Nothing to promote
         if: steps.staging.outputs.same == 'true'
         run: echo "Production already runs the staging digest." >> "$GITHUB_STEP_SUMMARY"
