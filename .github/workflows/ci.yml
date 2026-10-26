@@ -317,7 +317,7 @@ jobs:
     name: Verify signature, SBOM and provenance
     needs: [build, provenance]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: read
@@ -336,10 +336,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify (same checks as the Kyverno admission policy)
+      - name: Verify with cosign (signature, SBOM, provenance identity and branch)
         env:
           REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
         run: bash scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY"
+      - name: Install pinned, checksum-verified tools
+        run: bash scripts/ci/install-tools.sh
+      - name: Admission pre-check (the real Kyverno policies, same engine as the cluster)
+        env:
+          REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+        run: bash scripts/ci/verify-admission.sh "$REF"
 
   promote-staging:
     name: Promote to staging (GitOps)

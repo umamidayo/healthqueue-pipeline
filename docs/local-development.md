@@ -126,7 +126,8 @@ Use `-SlowPercent 20` for the latency SLO instead.
 | `Docker is not running` | Start Docker Desktop, or `up.ps1 -Driver hyperv` from an elevated PowerShell |
 | `tofu apply` times out on kube-prometheus-stack | Not enough memory: `minikube delete -p healthqueue` then `up.ps1 -MemoryMb 10240` |
 | Argo CD app `healthqueue-local` stuck `Unknown` / repo errors | The repo is private or not pushed. Push it, add a repo credential in Argo CD, or use `-Mode Direct` |
-| Pod `ErrImageNeverPull` | The image was not built into this profile: re-run `up.ps1` (it rebuilds) |
+| Pod `ErrImageNeverPull` | The image is not in this minikube profile: re-run `up.ps1`. With `-Driver docker` it builds with the host's Docker and runs `minikube image load`, then checks the image is present (`minikube image build` mishandles the build context on Windows and can exit 0 on failure) |
+| Argo CD `platform-policies` shows OutOfSync right after setup | Kyverno fills in policy defaults; the app uses server-side diff with mutation webhooks to account for them. If it persists, check that the app has the `compare-options` annotation (it arrives via Git, so push first) |
 | `verify.ps1` reports the scrape target missing | Prometheus discovers new targets within about 1 minute. Re-run |
 | Port-forward fails with "address in use" | Another process holds the port: `Get-NetTCPConnection -LocalPort 18080` |
 | `kyverno test` warns that ClusterPolicy is deprecated | Expected on Kyverno 1.19; see ADR 0007 |

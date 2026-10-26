@@ -7,6 +7,12 @@ metadata:
     healthqueue.io/environment: platform
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
+    # Kyverno's admission webhook fills in defaults when a policy is created
+    # (allowExistingViolations, signatureAlgorithm, validationFailureAction,
+    # ...). A client-side diff sees those as permanent drift. A server-side
+    # diff, including mutating webhooks, compares against what the API server
+    # would actually store, so it survives new defaults in Kyverno upgrades.
+    argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:

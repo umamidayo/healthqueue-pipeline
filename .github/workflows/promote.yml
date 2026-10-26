@@ -65,6 +65,16 @@ jobs:
           # Without pipefail, tee would mask a failed verification.
           set -o pipefail
           bash scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY" | tee verify.log
+      - name: Install pinned, checksum-verified tools
+        if: steps.staging.outputs.same != 'true'
+        run: bash scripts/ci/install-tools.sh
+      - name: Admission pre-check (the real Kyverno policies, same engine as the cluster)
+        if: steps.staging.outputs.same != 'true'
+        env:
+          REF: ${{ steps.staging.outputs.ref }}
+        run: |
+          set -o pipefail
+          bash scripts/ci/verify-admission.sh "$REF" | tee -a verify.log
       - name: Commit the production promotion
         if: steps.staging.outputs.same != 'true'
         env:

@@ -136,12 +136,12 @@ one, and the first approved `promote` run replaces the production one.
 | OpenTofu roots | `tofu validate` with committed lock files (OpenTofu 1.13) |
 | All of the above on Windows PowerShell 5.1 | `scripts/check.ps1` |
 | GitOps promotion scripts | Simulated against a local bare repo: staging commit, push-race rebase, out-of-order build refused, production copy |
-| On GitHub Actions | Validation, build, SBOM, scan, signing, SLSA provenance and verification jobs have run green on `main` |
+| On GitHub Actions | Validation, build, SBOM, scan, signing, SLSA provenance, verification and the bot-free staging promotion have run green on `main` |
+| Local Kubernetes (minikube + Docker Desktop) | `up.ps1` in Argo mode: Kyverno, Prometheus stack and Argo CD via OpenTofu; app deployed by Argo CD from GitHub; `verify.ps1` passes 13/14, and the 14th (`platform-policies` sync) depends on the server-side-diff fix reaching GitHub |
+| Admission policies on a live cluster | The CI-signed image is admitted; tags, foreign registries, unsigned digests, the wrong signer and the wrong branch are all rejected |
 
 Not yet verified:
 
-- the bot-free promotion jobs on GitHub (pending the next push),
-- Argo CD syncing a real cluster,
-- `up.ps1` end to end (it needs Docker Desktop or Hyper-V running).
-
-Run `up.ps1` + `verify.ps1` locally to exercise the cluster path.
+- the production `promote` workflow on GitHub (run it once the `production`
+  environment exists),
+- a non-local cluster (`infra/envs/production`).

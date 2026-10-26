@@ -72,6 +72,32 @@ Verification point:
   those. We sign with `--new-bundle-format=false --use-signing-config=false`,
   so every artifact for an image is in one format that one policy can verify.
 
+### Amendment (found in local end-to-end testing): pinned Fulcio roots
+
+Testing against a live cluster showed that **an image signed by CI was rejected
+at admission** with `x509: certificate signed by unknown authority`, even
+though `cosign verify` (and the CI `verify` job) accepted it.
+
+- **Cause:** cosign v3 in legacy format writes signatures **without the
+  certificate chain**. Kyverno's `ClusterPolicy` verifier does not fall back
+  to Sigstore's `trusted_root.json` to find the intermediate. Enabling
+  Kyverno's TUF client did not change this. The SLSA provenance passed only
+  because the generator's older cosign embeds the chain.
+- **Fix:** the policy pins Sigstore's public Fulcio root and intermediate
+  (`keyless.roots`, one YAML anchor shared by all three attestors). These are
+  the `fulcio_v1.crt.pem` / `fulcio_intermediate_v1.crt.pem` targets from
+  Sigstore's TUF repository, both valid until 2031. Identity checks are
+  unchanged: a policy expecting another repository or branch still rejects
+  the image (tested).
+- **Regression guard:** CI's `verify` job and the `promote` workflow now run
+  `scripts/ci/verify-admission.sh`, which evaluates the real policies with the
+  Kyverno CLI (the cluster's engine) against the built image. cosign alone is
+  not a faithful proxy for admission.
+- **Cost:** when Sigstore rotates the Fulcio CA, the pinned roots must be
+  updated (docs/operations.md, recurring maintenance). The admission pre-check
+  fails loudly when that happens. The ImageValidatingPolicy migration above
+  removes the pin, because it verifies against the trusted root.
+
 ## Trade-offs and consequences
 
 - **Kyverno 1.19 marks `kyverno.io/v1 ClusterPolicy` as deprecated** (the CLI

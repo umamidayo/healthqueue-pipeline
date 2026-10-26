@@ -14,6 +14,14 @@ reportsController:
   replicas: ${replicas > 1 ? 2 : 1}
   serviceMonitor:
     enabled: ${monitoring}
+features:
+  # Keep Sigstore trust material (Rekor and CT log keys) current from the
+  # official TUF repository instead of only what is compiled into Kyverno.
+  # Note: this does NOT supply the Fulcio chain for cosign v3 legacy-format
+  # signatures; those roots are pinned in verify-images.yaml (ADR 0007).
+  tuf:
+    enabled: true
+    mirror: https://tuf-repo-cdn.sigstore.dev
 config:
   # Never let a policy outage take down the platform itself.
   webhooks:

@@ -68,7 +68,20 @@ Check 'Kyverno policies installed' {
 Write-Step 'GitOps'
 $hasRoot = & kubectl --context $ClusterName -n argocd get application root --ignore-not-found -o name
 if ($hasRoot) {
-    foreach ($app in @('root', 'healthqueue-local', 'platform-policies', 'platform-observability')) {
+    $apps = @('root', 'healthqueue-local', 'platform-policies', 'platform-observability')
+    # Argo CD's status can be minutes old; ask for a fresh comparison first so
+    # this reports the current state, not a cached one.
+    foreach ($app in $apps) {
+        $null = Invoke-Quiet kubectl @('--context', $ClusterName, '-n', 'argocd', 'annotate', 'application', $app, 'argocd.argoproj.io/refresh=hard', '--overwrite')
+    }
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        Start-Sleep -Seconds 3
+        $pending = @($apps | Where-Object {
+            Invoke-Quiet kubectl @('--context', $ClusterName, '-n', 'argocd', 'get', 'application', $_, '-o', "jsonpath={.metadata.annotations['argocd\.argoproj\.io/refresh']}")
+        })
+    } while ($pending.Count -gt 0 -and (Get-Date) -lt $deadline)
+    foreach ($app in $apps) {
         Check "Argo CD $app" {
             $s = & kubectl --context $ClusterName -n argocd get application $app -o 'jsonpath={.status.sync.status}/{.status.health.status}'
             if ($s -ne 'Synced/Healthy') { throw "status is '$s' (expected Synced/Healthy)" }

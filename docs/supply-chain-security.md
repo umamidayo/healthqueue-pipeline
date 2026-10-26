@@ -69,7 +69,9 @@ start a pod.
 
 | Control | Where |
 |---|---|
-| Pre-promotion verification (signature, SBOM, provenance, source branch, entry point) | `scripts/ci/verify-image.sh` |
+| Pre-promotion verification (signature, SBOM, provenance, source branch, entry point) | `scripts/ci/verify-image.sh` (cosign) |
+| Admission pre-check: the real Kyverno policies evaluated against the built image by the Kyverno CLI, so CI and the cluster cannot disagree | `scripts/ci/verify-admission.sh` |
+| Sigstore Fulcio root and intermediate pinned in the admission policy (explicit, reviewable trust anchor) | `verify-images.yaml` `roots: &fulcio`, ADR 0007 |
 | **Admission:** Kyverno verifies the same at pod creation, fail-closed, for staging + production | `deploy/platform/policies/verify-images.yaml` |
 | **Admission:** only `ghcr.io/<owner>/*@sha256:*` images in staging + production | `deploy/platform/policies/require-digest.yaml` |
 | Pod Security Admission `restricted` on every app namespace | `deploy/base/namespace.yaml` |

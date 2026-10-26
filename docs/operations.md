@@ -130,6 +130,7 @@ receivers for `page` and `ticket` (see
 | Review and merge Dependabot PRs (actions, digests, npm, providers) | weekly | Auto-merge patch/minor once the DORA report shows the toil (see dora.md) |
 | **Helm chart upgrades** (Argo CD, Kyverno, kube-prometheus-stack) | monthly | Not covered by Dependabot. Check release notes; bump `chart_versions` in `infra/modules/platform/variables.tf`; `helm template` old vs new and diff; apply to local first (`up.ps1`), then production |
 | CI tool versions (`install-tools.sh` / `.ps1`) | quarterly | Bump version + SHA-256 in **both** scripts from the upstream checksum file |
+| Pinned Fulcio roots in `verify-images.yaml` | when Sigstore announces a Fulcio CA rotation, or if the CI admission pre-check fails with `x509: certificate signed by unknown authority` | Replace the `roots` block with the current `fulcio_v1.crt.pem` + `fulcio_intermediate_v1.crt.pem` from https://tuf-repo-cdn.sigstore.dev (see `targets.json` for the hashed file names); run `kyverno test deploy/platform/policies/tests` and `scripts/ci/verify-admission.sh` against a fresh image |
 | Kyverno ClusterPolicy deprecation | every Kyverno upgrade | Read release notes; execute the ADR 0007 migration before removal |
 | Rehearse rollback in staging | each sprint | [runbooks/rollback.md](runbooks/rollback.md); time it |
 | Review SLO targets and error budget policy | quarterly | Change `observability/slo-spec.json` via PR |

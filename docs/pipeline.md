@@ -47,7 +47,7 @@ the pipeline cannot run.
 | `ci / dependency-review` | PR | new dependencies' advisories and licences | High+ advisory, or a denied licence | 10s |
 | `ci / build` | PR: build only; main: push | image (distroless, non-root, digest-pinned bases); SPDX + CycloneDX SBOM; Grype gate; SARIF to code scanning; on main: cosign signature + SBOM attestation | fixable High/Critical vulnerability | 2-4 min |
 | `ci / provenance` | main | SLSA v0.2 provenance from `slsa-github-generator` (Build L3), attached to the image | generator fails | 1-2 min |
-| `ci / verify` | main | `scripts/ci/verify-image.sh`: the same three checks as admission | anything is missing or from the wrong identity/branch | 20s |
+| `ci / verify` | main | `verify-image.sh` (cosign: signature, SBOM, provenance identity and branch) **and** `verify-admission.sh` (the real Kyverno policies, evaluated by the Kyverno CLI, the cluster's own engine) | anything is missing, from the wrong identity/branch, or would be rejected at admission | 45s |
 | `ci / promote-staging` | main | commits the digest + `release.json` to `deploy/overlays/staging` with `GITHUB_TOKEN` (`[skip ci]`, `Source-Revision:` trailer) | push fails after 3 rebases | 15s |
 | Argo CD | cluster | syncs staging, and production after a promotion commit | sync fails or admission rejects (`ArgoCDSyncFailing` alert) | 0-3 min |
 | `promote` | manual (or scheduled) | waits for `production` environment approval; re-verifies the staging digest; commits it to `deploy/overlays/production`; evidence in the run summary | approval rejected, or verification fails | 30s + approval |

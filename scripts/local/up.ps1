@@ -69,10 +69,30 @@ if ($status -eq 'Running') {
 }
 Invoke-Native kubectl @('config', 'use-context', $ClusterName)
 
-Write-Step 'Building the API image inside minikube'
+Write-Step 'Building the API image and loading it into minikube'
 $sha = (& git rev-parse HEAD).Trim()
-Invoke-Native minikube @('-p', $ClusterName, 'image', 'build', '-t', 'healthqueue-api:local',
-    '--build-opt=build-arg=BUILD_VERSION=local', "--build-opt=build-arg=BUILD_REVISION=$sha", 'app')
+$appDir = Join-Path $RepoRoot 'app'
+if ($Driver -eq 'docker') {
+    # Build with the host's Docker (same as CI), then copy into the node.
+    # `minikube image build` mishandles the build context on Windows.
+    Invoke-Native docker @('build', '-t', 'healthqueue-api:local',
+        '--build-arg', 'BUILD_VERSION=local', '--build-arg', "BUILD_REVISION=$sha", $appDir)
+    Invoke-Native minikube @('-p', $ClusterName, 'image', 'load', '--overwrite=true', 'healthqueue-api:local')
+} else {
+    # Hyper-V: no host Docker daemon, so build inside the node.
+    Invoke-Native minikube @('-p', $ClusterName, 'image', 'build', '-t', 'healthqueue-api:local', '-f', 'Dockerfile',
+        '--build-opt=build-arg=BUILD_VERSION=local', "--build-opt=build-arg=BUILD_REVISION=$sha", $appDir)
+}
+# minikube can exit 0 even when a build or load fails, so check the result.
+$images = Invoke-Quiet minikube @('-p', $ClusterName, 'image', 'ls')
+if (-not ($images -match 'healthqueue-api:local')) {
+    throw 'healthqueue-api:local is not present in the minikube node after build/load.'
+}
+# The local overlay uses imagePullPolicy: Never, so pods keep the old image
+# until restarted. Restart if the Deployment already exists (re-runs).
+if (Invoke-Quiet kubectl @('--context', $ClusterName, '-n', 'healthqueue-local', 'get', 'deployment', 'healthqueue-api', '--ignore-not-found', '-o', 'name')) {
+    Invoke-Native kubectl @('--context', $ClusterName, '-n', 'healthqueue-local', 'rollout', 'restart', 'deployment/healthqueue-api')
+}
 Write-Ok "healthqueue-api:local ($($sha.Substring(0, 12)))"
 
 Write-Step 'Bootstrapping the platform with OpenTofu (Kyverno, Prometheus stack, Argo CD)'
