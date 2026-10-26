@@ -103,13 +103,13 @@ minutes.
 | Budget state (30d) | What happens |
 |---|---|
 | more than 50% remaining | Normal delivery |
-| 25-50% remaining | Each production promotion PR links the SLO dashboard; reviewer confirms no burn in staging since the build landed |
+| 25-50% remaining | The environment approver checks the staging SLO dashboard for burn since the build landed before approving a `promote` run |
 | under 25% remaining | Only fixes and reliability work are promoted to production; feature promotions wait |
 | exhausted | Production promotions frozen except for fixes; blameless postmortem; at least one reliability action item scheduled before the freeze lifts |
 | one incident consumes more than 20% | Postmortem regardless of remaining budget |
 
-The policy is enforced by people reviewing the promotion PR. The PR body
-links the evidence. Automating it (refusing to open the PR when
+The policy is enforced by the `production` environment approvers. The run
+summary links the evidence. Automating it (failing the run when
 `error_budget:remaining_ratio < 0.25`) is a small extension to
 `promote.yml`.
 

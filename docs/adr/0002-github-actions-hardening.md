@@ -45,7 +45,7 @@ Use GitHub Actions, hardened as follows:
    `actions` language, and OpenSSF Scorecard.
 7. **CLI tools downloaded in CI are checksum-verified** against hashes stored
    in the repo (`scripts/ci/install-tools.sh`).
-8. **Pushes to `main` use a GitHub App token**, not `GITHUB_TOKEN` (ADR 0008).
+8. **Promotion pushes use `GITHUB_TOKEN`** with `contents: write` granted to those two jobs only, optionally via a ruleset-bypassing deploy key (ADR 0013).
 
 ## Trade-offs and consequences
 

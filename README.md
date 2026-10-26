@@ -23,11 +23,11 @@ flowchart LR
   sign -->|digest commit| git[(Git: deploy/overlays)]
   git --> argo[Argo CD]
   argo --> stg[staging]
-  stg -.->|promotion PR<br/>CODEOWNERS| git
+  stg -.->|promote workflow<br/>environment approval| git
   argo --> prd[production]
   kyv{{Kyverno admission:<br/>signature + SBOM +<br/>provenance + digest}} --- stg & prd
   tofu[OpenTofu] -->|bootstraps| argo & kyv & prom[Prometheus,<br/>Grafana, Alertmanager]
-  prd -.->|Argo CD Notifications| gd[GitHub Deployments] --> dora[DORA + toil report<br/>90-day window]
+  git -.->|promotion commits| dora[DORA + toil report<br/>90-day window]
 ```
 
 ## Quick start (Windows)
@@ -65,12 +65,12 @@ node dora/cli.mjs sample --out dora-out; Get-Content dora-out/report.md
 | **Supply chain** | Keyless cosign signatures; SLSA Build L3 provenance via `slsa-github-generator`; verification in CI **and** at admission (Kyverno); digest-only, trusted-registry policy; distroless non-root image | [docs/supply-chain-security.md](docs/supply-chain-security.md), [`deploy/platform/policies/`](deploy/platform/policies) |
 | **SLSA** | Requirement-by-requirement mapping, threats to controls, known gaps | [docs/slsa.md](docs/slsa.md) |
 | **OpenTofu** | One platform module (Kyverno, kube-prometheus-stack, Argo CD + Notifications, root app) used by `local` and `production` roots; client-side **encrypted state** in production; provider lock files | [`infra/`](infra), [ADR 0004](docs/adr/0004-opentofu-for-platform-bootstrap.md) |
-| **Argo CD** | App-of-apps per cluster; AppProjects separate app and platform; automated sync with self-heal; notifications write GitHub Deployments | [`argocd/`](argocd), [ADR 0003](docs/adr/0003-gitops-with-argo-cd.md) |
+| **Argo CD** | App-of-apps per cluster; AppProjects separate app and platform; automated sync with self-heal | [`argocd/`](argocd), [ADR 0003](docs/adr/0003-gitops-with-argo-cd.md) |
 | **Kubernetes** | Kustomize base + local/staging/production overlays; PSA `restricted`; default-deny NetworkPolicy; PDB, HPA, graceful shutdown | [`deploy/`](deploy) |
-| **Promotion** | Verified digest auto-committed to staging; production via re-verified, evidence-carrying PR; rollback = `git revert` | [ADR 0008](docs/adr/0008-promotion-model.md), [runbooks/rollback.md](docs/runbooks/rollback.md) |
+| **Promotion** | Verified digest auto-committed to staging; production via an environment-approved, re-verified commit; no bot or GitHub App; rollback = `git revert` | [ADR 0013](docs/adr/0013-promotion-without-a-bot.md), [runbooks/rollback.md](docs/runbooks/rollback.md) |
 | **Observability** | Availability (99.5%) and latency (99% at most 300ms) SLOs over 30d; multi-window burn-rate alerts **generated from a spec and unit-tested with promtool**; pipeline SLOs; error budget policy; Grafana dashboard | [docs/observability.md](docs/observability.md), [`observability/`](observability) |
 | **DORA** | All five metrics from pipeline-emitted events; rolling window capped at 90 days, 90-day report retention; weekly trend and 30-vs-30-day comparison; ranked toil/flow/stability recommendations with a stated cost model | [docs/dora.md](docs/dora.md), [`dora/`](dora), [sample report](docs/dora/sample/report.md) |
-| **Decisions** | 12 ADRs, each with options, trade-offs and revisit triggers | [docs/adr/](docs/adr) |
+| **Decisions** | 13 ADRs, each with options, trade-offs and revisit triggers | [docs/adr/](docs/adr) |
 
 ## Repository layout
 
@@ -101,42 +101,47 @@ Each one has a full ADR. In short:
 | Kustomize for the app, Helm for third-party software | Reviewable YAML; promotion is a two-line diff | Verbose patches if environments diverge a lot | [0005](docs/adr/0005-kustomize-over-helm.md) |
 | SBOM from the built image, both formats, signed, gating | Covers base-image packages; consumers can trust and use it | ~30s per build; `only-fixed` lets unfixable CVEs through (visible, not blocking) | [0006](docs/adr/0006-sbom-generation.md) |
 | Keyless signing + SLSA L3 provenance + admission verification | Unforgeable provenance; fail-closed at the cluster; no keys | Admission depends on Rekor + registry; ClusterPolicy is deprecated in Kyverno 1.19 (migration planned); legacy signature format chosen for compatibility | [0007](docs/adr/0007-signing-provenance-admission.md) |
-| Digest promotion: auto to staging, PR to production | Same bytes everywhere; auditable, revertible gate | Bot can push to main (scoped and attributable); the PR gate adds wait (measured) | [0008](docs/adr/0008-promotion-model.md) |
-| DORA from Argo CD-emitted deployments + `release.json`, 90-day cap | Exact lead time; no manual logging; bounded API cost | GitHub App setup; time-window incident attribution is a heuristic; no long-term history in-repo | [0009](docs/adr/0009-dora-measurement.md) |
+| Digest promotion: auto to staging, approval-gated to production | Same bytes everywhere; auditable, revertible gate | Promotion jobs push to main; the approval gate adds wait (measured) | [0008](docs/adr/0008-promotion-model.md) |
+| DORA from promotion commits + `Source-Revision:` trailers, 90-day cap | Exact lead time; no manual logging; bounded API cost | Deploy time = commit time (Argo CD converges minutes later); failed syncs not counted; time-window incident attribution is a heuristic; no long-term history in-repo | [0009](docs/adr/0009-dora-measurement.md) |
 | Burn-rate SLO alerts generated from a spec | Few, meaningful pages; one place states each objective; unit-tested | A small generator to maintain; low-traffic flapping not yet guarded | [0010](docs/adr/0010-slo-burn-rate-alerting.md) |
 | Stateless, zero-dependency workload | Minimal attack surface; scales freely; no health data | Hand-rolled metrics; the SBOM is mostly base image; no tracing yet | [0011](docs/adr/0011-stateless-zero-dependency-workload.md) |
 | minikube + PowerShell for local | Runs on any Windows 10/11 with or without Docker Desktop; production-like | ~8 GB RAM; bash and PowerShell versions of the checks to keep aligned | [0012](docs/adr/0012-local-development-on-windows.md) |
+| No bot: `GITHUB_TOKEN` pushes + GitHub Environment gate | Zero extra accounts, apps or long-lived credentials; works out of the box | Production gate is an approval, not a PR review; a PR-requiring ruleset on `main` needs an optional deploy key | [0013](docs/adr/0013-promotion-without-a-bot.md) |
 
 ## Using this for real
 
 Follow [docs/operations.md](docs/operations.md):
 
-1. Replace the owner `umamidayo`.
-2. Create the release-bot GitHub App and its secret.
-3. Apply the rulesets that back the SLSA Source-track claims.
+1. Replace the owner `umamidayo` (only needed for a fork).
+2. Create the `production` environment with required reviewers, and make the
+   GHCR package public (or add a pull secret).
+3. Optional: add a deploy key and a ruleset on `main` for the SLSA
+   Source-track claims.
 4. `tofu apply` the production root against your cluster.
-5. Create the notifications secret.
-6. Wire Alertmanager receivers.
+5. Wire Alertmanager receivers.
 
-The staging and production overlays start with an all-zero placeholder
-digest. The first merge to `main` replaces the staging one.
+No bot or GitHub App is needed. The staging and production overlays start with
+an all-zero placeholder digest. The first push to `main` replaces the staging
+one, and the first approved `promote` run replaces the production one.
 
 ## Status of verification
 
 | Verified | How |
 |---|---|
-| App, promotion, DORA unit tests | `node --test`: 27 + 7 + 26 tests, coverage gate 90% lines / 80% branches |
+| App, promotion, DORA unit tests | `node --test`: 27 + 7 + 27 tests, coverage gate 90% lines / 80% branches |
 | All 47 rendered Kubernetes resources across 7 Kustomize roots | kubeconform strict, Kubernetes 1.34 + CRD schemas |
 | 26 Prometheus rules; alert behaviour | `promtool check rules`; `promtool test rules` (4 SLO scenarios + Argo CD scenario) |
 | Admission policies | `kyverno test` (6 cases) against Kyverno 1.19.2 |
-| Workflows | actionlint 1.7.12 |
+| Workflows and CI scripts | actionlint 1.7.12 with shellcheck 0.11.0 (as on GitHub's runners); shellcheck on `scripts/ci/*.sh` |
 | OpenTofu roots | `tofu validate` with committed lock files (OpenTofu 1.13) |
 | All of the above on Windows PowerShell 5.1 | `scripts/check.ps1` |
+| GitOps promotion scripts | Simulated against a local bare repo: staging commit, push-race rebase, out-of-order build refused, production copy |
+| On GitHub Actions | Validation, build, SBOM, scan, signing, SLSA provenance and verification jobs have run green on `main` |
 
-Not verifiable without a live GitHub repository and cluster:
+Not yet verified:
 
-- the signing, provenance and push jobs,
-- Argo CD Notifications writing Deployments,
+- the bot-free promotion jobs on GitHub (pending the next push),
+- Argo CD syncing a real cluster,
 - `up.ps1` end to end (it needs Docker Desktop or Hyper-V running).
 
-Run `up.ps1` + `verify.ps1` locally, and push to GitHub to exercise the rest.
+Run `up.ps1` + `verify.ps1` locally to exercise the cluster path.

@@ -2,9 +2,18 @@
 //
 // Data sources, chosen so that the pipeline itself produces every event and
 // nothing needs to be logged by hand (docs/adr/0009-dora-measurement.md):
-//   production deploys  GitHub Deployments written by Argo CD Notifications
-//                       (fallback: commits to deploy/overlays/production/release.json)
-//   source revision     release.json at the deployed commit
+//   production deploys  default ("commits"): promotion commits that changed
+//                       deploy/overlays/production/release.json, written by
+//                       the promote workflow. Deploy time = commit time; Argo CD
+//                       converges a few minutes later.
+//                       opt-in ("deployments"): GitHub Deployments written by
+//                       Argo CD Notifications (needs a GitHub App, ADR 0009).
+//                       Not the default: the promote workflow's `environment:`
+//                       also creates GitHub Deployments, and those point at the
+//                       commit *before* the promotion, so they would misattribute
+//                       every change (docs/adr/0013-promotion-without-a-bot.md).
+//   source revision     the commit's "Source-Revision:" trailer, else
+//                       release.json at the deployed commit
 //   changes             compare API between consecutive source revisions
 //   staging deploys     commits to deploy/overlays/staging/release.json
 //                       (each carries a "Source-Revision:" trailer)
@@ -20,8 +29,22 @@ const REWORK_RE = /^(revert\b|hotfix\b|fix\(hotfix\))|\bhotfix:/i;
 
 export const isBot = (user) => Boolean(user) && (user.type === 'Bot' || /\[bot\]$/.test(user.login ?? ''));
 
-export async function collect({ client, repo, days = 90, now = new Date(), workflowFile = 'ci.yml', maxPullRequests = 300 }) {
+export const DEPLOYMENT_SOURCES = ['commits', 'deployments'];
+const TRAILER_RE = /^Source-Revision:\s*([0-9a-f]{40})\s*$/m;
+
+export async function collect({
+  client,
+  repo,
+  days = 90,
+  now = new Date(),
+  workflowFile = 'ci.yml',
+  maxPullRequests = 300,
+  deploymentSource = 'commits',
+}) {
   days = clampWindowDays(days);
+  if (!DEPLOYMENT_SOURCES.includes(deploymentSource)) {
+    throw new Error(`--deployment-source must be one of: ${DEPLOYMENT_SOURCES.join(', ')}`);
+  }
   const [owner, name] = repo.split('/');
   if (!owner || !name) throw new Error('--repo must be owner/name');
   const base = `/repos/${owner}/${name}`;
@@ -49,41 +72,47 @@ export async function collect({ client, repo, days = 90, now = new Date(), workf
   }
 
   // --- production deployments ---------------------------------------------
-  // Collect one deployment older than the window as the lead-time baseline.
+  // One deployment older than the window is kept as the lead-time baseline.
   const prod = [];
   let baseline = null;
-  for await (const d of client.paginate(`${base}/deployments?environment=production&per_page=100`)) {
-    const { data: statuses } = await client.request(`${base}/deployments/${d.id}/statuses?per_page=100`);
-    const success = (statuses ?? []).filter((s) => s.state === 'success').at(-1); // oldest success
-    const failure = (statuses ?? []).find((s) => s.state === 'failure' || s.state === 'error');
-    const status = success ? 'success' : failure ? 'failure' : null;
-    if (!status) continue; // still pending / queued
-    const deployedAt = (success ?? failure).created_at;
-    const entry = { id: String(d.id), environment: 'production', deployedAt, status, ref: d.sha };
-    if (new Date(deployedAt) < start) {
-      if (status === 'success') {
+  if (deploymentSource === 'deployments') {
+    for await (const d of client.paginate(`${base}/deployments?environment=production&per_page=100`)) {
+      const { data: statuses } = await client.request(`${base}/deployments/${d.id}/statuses?per_page=100`);
+      const success = (statuses ?? []).filter((s) => s.state === 'success').at(-1); // oldest success
+      const failure = (statuses ?? []).find((s) => s.state === 'failure' || s.state === 'error');
+      const status = success ? 'success' : failure ? 'failure' : null;
+      if (!status) continue; // still pending / queued
+      const deployedAt = (success ?? failure).created_at;
+      const entry = { id: String(d.id), environment: 'production', deployedAt, status, ref: d.sha };
+      if (new Date(deployedAt) < start) {
+        if (status === 'success') {
+          baseline = entry;
+          break;
+        }
+        continue;
+      }
+      prod.push(entry);
+    }
+    if (prod.length === 0) notes.push('No GitHub Deployments found for "production"; did you mean --deployment-source commits?');
+  } else {
+    notes.push('Production deploys are promotion commits to deploy/overlays/production (deploy time = commit time; Argo CD converges minutes later). Failed syncs are not visible in this mode.');
+    const since = new Date(start.getTime() - 30 * DAY_MS).toISOString();
+    for await (const c of client.paginate(`${base}/commits?path=${RELEASE_PATH('production')}&since=${since}&per_page=100`)) {
+      const trailer = TRAILER_RE.exec(c.commit.message ?? '')?.[1];
+      const entry = { id: c.sha, environment: 'production', deployedAt: c.commit.committer.date, status: 'success', ref: c.sha };
+      if (trailer) entry.sourceRevision = trailer;
+      if (inWindow(entry.deployedAt)) prod.push(entry);
+      else if (!baseline) {
         baseline = entry;
         break;
       }
-      continue;
-    }
-    prod.push(entry);
-  }
-
-  if (prod.length === 0) {
-    notes.push('No GitHub Deployments found for "production"; fell back to commits that changed the production release.json (deploy time = merge time).');
-    const since = new Date(start.getTime() - 30 * DAY_MS).toISOString();
-    for await (const c of client.paginate(`${base}/commits?path=${RELEASE_PATH('production')}&since=${since}&per_page=100`)) {
-      const entry = { id: c.sha, environment: 'production', deployedAt: c.commit.committer.date, status: 'success', ref: c.sha };
-      if (inWindow(entry.deployedAt)) prod.push(entry);
-      else if (!baseline) baseline = entry;
     }
   }
 
   // Dedupe re-notifications of the same Git revision (Argo CD sends one per
   // revision, but a manual re-sync can create a second record).
   const seenRefs = new Set();
-  const prodSorted = prod
+  let prodSorted = prod
     .sort((a, b) => new Date(a.deployedAt) - new Date(b.deployedAt))
     .filter((d) => {
       const k = `${d.ref}:${d.status}`;
@@ -92,8 +121,23 @@ export async function collect({ client, repo, days = 90, now = new Date(), workf
       return true;
     });
 
-  for (const d of [baseline, ...prodSorted].filter(Boolean)) {
-    d.sourceRevision = (await sourceRevisionAt('production', d.ref)) ?? d.ref;
+  if (deploymentSource === 'commits') {
+    // A release.json change without a source revision is not a deployment:
+    // it is the placeholder (e.g. the commit that created the file) or an edit
+    // to the file's metadata. Counting it would invent a deploy.
+    for (const d of [baseline, ...prodSorted].filter(Boolean)) {
+      d.sourceRevision ??= await sourceRevisionAt('production', d.ref);
+    }
+    const before = prodSorted.length;
+    prodSorted = prodSorted.filter((d) => d.sourceRevision);
+    if (baseline && !baseline.sourceRevision) baseline = null;
+    if (prodSorted.length < before) {
+      notes.push(`${before - prodSorted.length} change(s) to the production release.json had no source revision (placeholder) and were not counted as deployments.`);
+    }
+  } else {
+    for (const d of [baseline, ...prodSorted].filter(Boolean)) {
+      d.sourceRevision ??= (await sourceRevisionAt('production', d.ref)) ?? d.ref;
+    }
   }
   if (!baseline) notes.push('No production deployment older than the window was found; the first deployment in the window has no lead-time baseline.');
 
@@ -119,7 +163,7 @@ export async function collect({ client, repo, days = 90, now = new Date(), workf
   // --- staging deployments (cheap: one call per 100 promotions) -----------
   const staging = [];
   for await (const c of client.paginate(`${base}/commits?path=${RELEASE_PATH('staging')}&since=${start.toISOString()}&per_page=100`)) {
-    const m = /^Source-Revision:\s*([0-9a-f]{40})\s*$/m.exec(c.commit.message);
+    const m = TRAILER_RE.exec(c.commit.message ?? '');
     if (m) {
       staging.push({ id: c.sha, environment: 'staging', deployedAt: c.commit.committer.date, status: 'success', sourceRevision: m[1], rework: false, changes: [] });
     }

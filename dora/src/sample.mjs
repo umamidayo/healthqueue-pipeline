@@ -1,6 +1,6 @@
 // Deterministic synthetic dataset for demos, docs and tests. The shapes mimic
 // what the GitHub collector produces for this pipeline (PR -> main CI ->
-// staging -> promotion PR -> production), with a gentle improvement trend so
+// staging -> approved promote run -> production), with a gentle improvement trend so
 // the first-vs-last comparison has something to show. Not real data.
 import { SCHEMA_VERSION, clampWindowDays } from './dataset.mjs';
 import { DAY_MS, HOUR_MS } from './stats.mjs';

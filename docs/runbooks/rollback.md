@@ -14,17 +14,16 @@ redeployed.
    git log --oneline -5 -- deploy/overlays/production
    ```
 
-2. Revert it with a PR (fastest in the GitHub UI: open the merged promotion
-   PR and click **Revert**), or from a shell:
+2. Revert it and push to `main` (or open a PR if `main` requires one):
 
    ```bash
-   git switch -c rollback/production main
-   git revert --no-edit <merge-or-commit-sha>
-   git push -u origin rollback/production
+   git switch main && git pull
+   git revert --no-edit <promotion-commit-sha>
+   git push
    ```
 
-   Open the PR, get CODEOWNERS approval, and merge. In a sev1 an admin may
-   bypass review, which is recorded in the ruleset audit log.
+   Do not re-run `promote` to roll back. It always promotes what staging
+   runs, and staging may contain the bad build.
 3. Watch Argo CD converge (usually under 3 minutes; trigger a refresh to skip
    polling):
 

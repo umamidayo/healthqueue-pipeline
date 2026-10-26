@@ -94,7 +94,7 @@ if (Test-Path (Join-Path $tools 'kubeconform.exe')) {
     Step 'actionlint (+ shellcheck on run: blocks)' { Invoke-Native (Join-Path $tools 'actionlint.exe') @('-no-color') }
     if (Test-Path (Join-Path $tools 'shellcheck.exe')) {
         Step 'shellcheck scripts/ci' {
-            Invoke-Native (Join-Path $tools 'shellcheck.exe') (@('-f', 'gcc') + (Get-ChildItem scripts/ci -Filter *.sh).FullName)
+            Invoke-Native (Join-Path $tools 'shellcheck.exe') (@('-x', '-f', 'gcc') + (Get-ChildItem scripts/ci -Filter *.sh | ForEach-Object { 'scripts/ci/' + $_.Name }))
         }
     }
 } else {

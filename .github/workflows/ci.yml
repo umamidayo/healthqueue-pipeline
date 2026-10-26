@@ -120,7 +120,7 @@ jobs:
       - name: Lint workflows (actionlint runs shellcheck on every run block)
         run: actionlint -color
       - name: Lint CI scripts
-        run: shellcheck -f gcc scripts/ci/*.sh
+        run: shellcheck -x -f gcc scripts/ci/*.sh
 
   iac:
     name: Validate OpenTofu
@@ -348,7 +348,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: read # the push itself uses the release bot's token
+      # Push the digest commit to main with the built-in GITHUB_TOKEN. Commits
+      # it makes never trigger workflows, and the [skip ci] marker documents it.
+      contents: write
     concurrency:
       group: promote-staging
       cancel-in-progress: false
@@ -356,19 +358,13 @@ jobs:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
-      # A GitHub App token (not GITHUB_TOKEN) so the push can bypass the main
-      # ruleset and so Argo CD / downstream workflows see a real actor.
-      - id: app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          permission-contents: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ steps.app-token.outputs.token }}
+          # Optional: a deploy key that a "require pull request" ruleset on main
+          # lets bypass (docs/operations.md, section 2). Empty = GITHUB_TOKEN.
+          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -376,6 +372,4 @@ jobs:
         env:
           DIGEST: ${{ needs.build.outputs.digest }}
           IMAGE: ${{ needs.build.outputs.image }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: bash scripts/ci/promote-staging.sh

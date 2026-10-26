@@ -67,10 +67,10 @@ const routes = {
 };
 
 describe('collect (GitHub)', () => {
-  it('normalizes deployments, changes, incidents, runs and reviews', async () => {
+  it('normalizes GitHub Deployments (opt-in), changes, incidents, runs and reviews', async () => {
     const { fetchImpl } = fakeGitHub(routes);
     const client = createGitHubClient({ fetchImpl });
-    const ds = await collect({ client, repo: 'o/r', days: 30, now: new Date('2026-10-25T00:00:00Z') });
+    const ds = await collect({ client, repo: 'o/r', days: 30, now: new Date('2026-10-25T00:00:00Z'), deploymentSource: 'deployments' });
 
     const prod = ds.deployments.filter((d) => d.environment === 'production');
     assert.equal(prod.length, 1, 'baseline deployment outside the window is not reported');
@@ -89,24 +89,40 @@ describe('collect (GitHub)', () => {
     assert.deepEqual(ds.pullRequests, [{ number: 5, createdAt: '2026-10-08T10:00:00Z', firstReviewAt: '2026-10-08T14:00:00Z', mergedAt: '2026-10-09T12:00:00Z', bot: false }]);
   });
 
-  it('falls back to release.json commits when no Deployments exist', async () => {
-    const { fetchImpl } = fakeGitHub({
-      [`${base}/deployments?environment=production`]: [],
+  it('uses promotion commits by default, reading the Source-Revision trailer', async () => {
+    const { fetchImpl, calls } = fakeGitHub({
+      // GitHub Deployments exist (created by the promote job's environment) but
+      // must be ignored in the default mode: they point at the pre-promotion commit.
+      [`${base}/deployments?environment=production`]: [{ id: 99, sha: 'wrong' }],
       [`${base}/commits?path=deploy/overlays/production/release.json`]: [
-        { sha: 'm2', commit: { committer: { date: '2026-10-12T00:00:00Z' } } },
-        { sha: 'm1', commit: { committer: { date: '2026-09-01T00:00:00Z' } } },
+        // In-window commit that only created/edited the placeholder file.
+        { sha: 'm4', commit: { message: 'initial commit', committer: { date: '2026-10-20T00:00:00Z' } } },
+        { sha: 'm3', commit: { message: `chore(deploy): promote 2222 to production [skip ci]
+
+Source-Revision: ${SRC_NEW}`, committer: { date: '2026-10-12T00:00:00Z' } } },
+        { sha: 'm2', commit: { message: 'older promotion without trailer', committer: { date: '2026-09-01T00:00:00Z' } } },
+        { sha: 'm1', commit: { message: 'even older', committer: { date: '2026-08-01T00:00:00Z' } } },
       ],
-      [`${base}/contents/deploy/overlays/production/release.json?ref=m2`]: release(SRC_NEW),
-      [`${base}/contents/deploy/overlays/production/release.json?ref=m1`]: release(SRC_OLD),
-      [`${base}/compare/`]: { total_commits: 0, commits: [] },
+      [`${base}/contents/deploy/overlays/production/release.json?ref=m2`]: release(SRC_OLD),
+      [`${base}/contents/deploy/overlays/production/release.json?ref=m4`]: release(null),
+      [`${base}/compare/${SRC_OLD}...${SRC_NEW}`]: { total_commits: 0, commits: [] },
       [`${base}/commits?path=deploy/overlays/staging`]: [],
       [`${base}/issues`]: [],
       [`${base}/actions/runs`]: { workflow_runs: [] },
       [`${base}/pulls?`]: [],
     });
     const ds = await collect({ client: createGitHubClient({ fetchImpl }), repo: 'o/r', days: 30, now: new Date('2026-10-25T00:00:00Z') });
-    assert.deepEqual(ds.deployments.map((d) => [d.id, d.sourceRevision]), [['m2', SRC_NEW]]);
-    assert.match(ds.notes.join(' '), /fell back/);
+    assert.deepEqual(ds.deployments.map((d) => [d.id, d.sourceRevision]), [['m3', SRC_NEW]], 'placeholder m4 is not a deployment');
+    assert.match(ds.notes.join(' '), /1 change\(s\) .* not counted/);
+    assert.ok(!calls.some((c) => c.includes('/deployments')), 'GitHub Deployments are not read in commits mode');
+    assert.ok(!calls.some((c) => c.includes('ref=m3')), 'trailer avoids a contents API call');
+    assert.ok(calls.some((c) => c.includes(`/compare/${SRC_OLD}...${SRC_NEW}`)), 'baseline from the newest pre-window promotion');
+    assert.ok(!calls.some((c) => c.includes('ref=m1')), 'stops at the first pre-window promotion');
+  });
+
+  it('rejects unknown deployment sources', async () => {
+    const { fetchImpl } = fakeGitHub(routes);
+    await assert.rejects(collect({ client: createGitHubClient({ fetchImpl }), repo: 'o/r', days: 30, deploymentSource: 'argo' }), /deployment-source/);
   });
 
   it('enforces the request budget', async () => {

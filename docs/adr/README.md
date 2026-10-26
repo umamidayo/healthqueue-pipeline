@@ -14,10 +14,11 @@ the old one and update the old one's status.
 | [0005](0005-kustomize-over-helm.md) | Kustomize, not Helm, for application manifests | Accepted |
 | [0006](0006-sbom-generation.md) | SBOMs with Syft in SPDX and CycloneDX, attached as signed attestations | Accepted |
 | [0007](0007-signing-provenance-admission.md) | Keyless signing, SLSA Build L3 provenance, admission-time verification | Accepted |
-| [0008](0008-promotion-model.md) | Digest promotion: automatic to staging, PR-gated to production | Accepted |
+| [0008](0008-promotion-model.md) | Digest promotion: automatic to staging, PR-gated to production | Superseded in part by 0013 |
 | [0009](0009-dora-measurement.md) | DORA metrics from pipeline-emitted events over a 90-day window | Accepted |
 | [0010](0010-slo-burn-rate-alerting.md) | SLOs with multi-window, multi-burn-rate alerts generated from a spec | Accepted |
 | [0011](0011-stateless-zero-dependency-workload.md) | A stateless, zero-dependency reference workload | Accepted |
 | [0012](0012-local-development-on-windows.md) | Local development on Windows with minikube and PowerShell | Accepted |
+| [0013](0013-promotion-without-a-bot.md) | Promote with GITHUB_TOKEN and a GitHub Environment gate, without a bot | Accepted |
 
 New ADRs start from [template.md](template.md).

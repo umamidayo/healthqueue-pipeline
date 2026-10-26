@@ -1,6 +1,6 @@
 # 0008. Digest promotion: automatic to staging, PR-gated to production
 
-- Status: Accepted
+- Status: Superseded in part by [0013](0013-promotion-without-a-bot.md). Digest pinning, `release.json`, automatic staging and the ordering guard still apply. The GitHub App and the production PR were replaced by `GITHUB_TOKEN` and a GitHub Environment gate.
 - Date: 2026-10-25
 
 ## Context

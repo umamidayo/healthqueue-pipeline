@@ -18,8 +18,8 @@ All metrics are for the **production** environment.
 
 | Metric | Definition used here | Data source |
 |---|---|---|
-| **Deployment frequency** | Successful production deployments per day / week, plus distinct days with a deploy | GitHub Deployments (written by Argo CD Notifications on sync) |
-| **Change lead time** | For each human-authored commit: author time to the first successful production deploy containing it. Reported as p50 and p90 | `release.json` source revision at each deploy; compare API between consecutive revisions; bots and `[skip ci]` commits excluded |
+| **Deployment frequency** | Successful production deployments per day / week, plus distinct days with a deploy | Promotion commits to `deploy/overlays/production/release.json` (default); GitHub Deployments from Argo CD Notifications (opt-in, `--deployment-source deployments`) |
+| **Change lead time** | For each human-authored commit: author time to the first successful production deploy containing it. Reported as p50 and p90 | `Source-Revision:` trailer (or `release.json`) at each deploy; compare API between consecutive revisions; bots and `[skip ci]` commits excluded |
 | **Change fail rate** | (failed syncs + deploys that caused an incident) / attempted deploys | Deployment statuses; issues labelled `incident` |
 | **Failed deployment recovery time** | Incident open to close for deploy-attributed incidents, plus failed sync to next successful deploy. p50 and p90 | Same |
 | **Deployment rework rate** | Deploys whose changes include a `revert`/`hotfix` commit / successful deploys | Commit messages in the deploy's change range |
@@ -43,8 +43,11 @@ All metrics are for the **production** environment.
 
 ## Why the numbers can be trusted
 
-- No human logs a deployment. Argo CD reports what actually converged,
-  including failed syncs.
+- No human logs a deployment. The promote workflow's commit is the record.
+  It is made only after approval and verification, and Argo CD applies it
+  within minutes. Failed syncs are not counted in commit mode (they still
+  alert via `ArgoCDSyncFailing`); opt into GitHub Deployments to count them
+  (ADR 0013).
 - `release.json` ties every production digest to the exact source commit it
   was built from. Lead time is measured, not estimated from merge times.
 - **Missing data shows as missing.** Metrics with no data are `n/a`, not 0,
@@ -71,10 +74,10 @@ All metrics are for the **production** environment.
 | Manual task in a typical setup | What replaces it here |
 |---|---|
 | Building and pushing images by hand or with ad-hoc scripts | `ci / build` on every merge |
-| Editing image tags in manifests to deploy | `promote-staging` commits the digest; `promote` writes the production PR |
+| Editing image tags in manifests to deploy | `promote-staging` commits the digest; an approved `promote` run commits production |
 | `kubectl apply` / `helm upgrade` from a laptop | Argo CD auto-sync with self-heal |
-| Checking a release is signed before approving | Re-verification runs before the PR exists; the log is in the PR body |
-| Logging deployments in a spreadsheet for metrics | Argo CD Notifications to GitHub Deployments |
+| Checking a release is signed before approving | Re-verification runs after approval and before the commit; the log is in the run summary |
+| Logging deployments in a spreadsheet for metrics | Promotion commits with `Source-Revision:` trailers |
 | Rebuilding per environment | One digest flows staging to production |
 | Rolling back by redeploying an old build | `git revert` of the promotion; previous digest is still admissible |
 | Hand-writing burn-rate alert rules | Generated from `slo-spec.json`, with unit tests |
@@ -112,7 +115,7 @@ Within a priority, rank is estimated impact per unit of effort.
 | Constant | Default |
 |---|---|
 | Manual re-run | 15 min |
-| Merging one promotion PR | 10 min |
+| Starting and approving one promotion | 10 min |
 | Merging one bot PR | 5 min |
 | Responders per incident | 2 |
 | Share of CI wait that blocks the author | 0.25 |

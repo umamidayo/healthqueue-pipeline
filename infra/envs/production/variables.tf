@@ -32,11 +32,13 @@ variable "argocd_url" {
 }
 
 variable "github_app_id" {
-  description = "GitHub App used by Argo CD Notifications to record deployments."
+  description = "Optional. GitHub App used by Argo CD Notifications to write GitHub Deployments. Empty (default) disables the notifier; DORA then uses promotion commits (ADR 0013)."
   type        = string
+  default     = ""
 }
 
 variable "github_app_installation_id" {
-  description = "Installation ID of that GitHub App."
+  description = "Optional. Installation ID of that GitHub App."
   type        = string
+  default     = ""
 }

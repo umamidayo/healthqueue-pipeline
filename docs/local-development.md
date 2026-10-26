@@ -116,7 +116,7 @@ Use `-SlowPercent 20` for the latency SLO instead.
 | Kyverno verify policy | installed, does not match `healthqueue-local` | enforced |
 | Replicas | 1 | 3 (HPA 3-10) |
 | Chaos hooks | enabled | disabled |
-| Argo CD Notifications to GitHub | off (no GitHub App) | on (feeds DORA) |
+| Promotion | `up.ps1` | `promote` workflow, environment-approved |
 | Tofu state | local file, unencrypted | remote, client-side encrypted |
 
 ## Troubleshooting

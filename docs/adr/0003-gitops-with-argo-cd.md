@@ -31,9 +31,10 @@ Argo CD, installed by OpenTofu (ADR 0004), with an **app-of-apps** layout:
   platform alert rules. Application owners cannot weaken admission policy.
 - All Applications use **automated sync with prune and self-heal**. Git is the
   only way to change the cluster, and manual edits are reverted.
-- **Production also auto-syncs.** The human gate is the promotion PR
-  (ADR 0008), not a Sync button. A merged change is a deployed change, which
-  keeps DORA deployment timestamps honest.
+- **Production also auto-syncs.** The human gate is the approved `promote`
+  run in the `production` environment (ADR 0013), not a Sync button. A
+  promotion commit is a deployed change, which keeps DORA deployment
+  timestamps honest.
 - The reference topology runs **staging and production as namespaces on one
   cluster** (`argocd/clusters/production`). This keeps the example runnable
   with one cluster. A real deployment should use a cluster per environment:

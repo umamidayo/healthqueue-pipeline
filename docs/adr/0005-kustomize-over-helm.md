@@ -7,7 +7,7 @@
 
 The application has three environments (local, staging, production) that
 differ in namespace, image reference, replica counts, resources and a few env
-vars. The manifests are reviewed in promotion PRs, so reviewers must be able to
+vars. The manifests are reviewed in pull requests and promotion run summaries, so reviewers must be able to
 see what changes.
 
 ## Options considered

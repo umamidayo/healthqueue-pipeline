@@ -11,7 +11,7 @@ and still settling.
 | Track | Level claimed | Basis |
 |---|---|---|
 | **Build** | **L3** | Hosted, ephemeral GitHub runners; provenance generated and signed by the isolated `slsa-github-generator` reusable workflow; verified at admission |
-| **Source** | **L2-aligned** when the repo settings in [operations.md](operations.md#2-repository-rulesets) are applied; L3/L4 controls partially present | Git history on GitHub; rulesets enforcing PRs, reviews and status checks; CODEOWNERS |
+| **Source** | **L2-aligned** when the ruleset and deploy key in [operations.md](operations.md#2-protecting-main-optional) are applied; **L1** without them | Git history on GitHub; rulesets enforcing PRs, reviews and status checks; CODEOWNERS |
 | Dependencies | Not a SLSA level; addressed by pinning + SBOM + scanning | See [supply-chain-security.md](supply-chain-security.md) |
 
 "Aligned" means the controls exist and are configured by this repo or its
@@ -54,10 +54,11 @@ documented settings. It does not mean an external audit has attested them.
 
 Gaps:
 
-- **Bot pushes bypass review.** The release bot pushes staging digest bumps
-  to `main` without review (ADR 0008). The change is machine-generated from
-  a verified artifact, attributable, and limited to one path. Restrict the
-  bot with a push ruleset (operations.md) so it cannot change anything else.
+- **Automated pushes bypass review.** Staging and production digest commits
+  reach `main` without a PR (ADR 0013). They are machine-generated from a
+  verified artifact, attributable to `github-actions[bot]`, limited to one
+  overlay each, and for production gated by environment approval. With a
+  protected `main`, the deploy key is the only bypass actor.
 - **Signed commits** are recommended but not required, so the reference
   works for contributors without signing keys.
 - **No source provenance attestations** (VSAs for the source revision) are

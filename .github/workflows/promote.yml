@@ -1,15 +1,16 @@
-# Opens a pull request that promotes the build currently in staging to
-# production. Merging that PR (CODEOWNERS approval required) is the production
-# change gate; Argo CD deploys on merge. See docs/adr/0008-promotion-model.md.
+# Promotes the build currently running in staging to production.
 #
-# Re-verifies the image before opening the PR, so a reviewer only ever sees
-# promotions that the production admission policy will accept.
+# The production gate is the GitHub Environment "production": add required
+# reviewers to it (Settings > Environments) and every run waits for approval
+# before anything changes. The job then re-verifies the image and commits the
+# staging digest to deploy/overlays/production; Argo CD deploys it.
+# No GitHub App or bot account is needed. See docs/adr/0013-promotion-without-a-bot.md.
 name: promote
 
 on:
   workflow_dispatch:
-  # Uncomment to keep a promotion PR always open with the latest staging
-  # build (recommended by the DORA toil report once staging soak is trusted).
+  # Uncomment to promote on a schedule once staging soak is trusted
+  # (recommended by the DORA toil report).
   # schedule:
   #   - cron: "0 9-16 * * 1-5"
 
@@ -25,27 +26,23 @@ env:
 
 jobs:
   promote:
-    name: Open production promotion PR
+    name: Promote staging to production
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    environment:
+      name: production
     permissions:
-      contents: read
-      packages: read
+      contents: write # commit the digest to the production overlay
+      packages: read # read signatures and attestations from GHCR
     steps:
       - uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
-      - id: app-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          token: ${{ steps.app-token.outputs.token }}
+          # Optional deploy key for a protected main (docs/operations.md, section 2).
+          ssh-key: ${{ secrets.GITOPS_DEPLOY_KEY }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -65,18 +62,16 @@ jobs:
         env:
           REF: ${{ steps.staging.outputs.ref }}
         run: |
-          # Without pipefail, tee would mask a failed verification and the PR would still open.
+          # Without pipefail, tee would mask a failed verification.
           set -o pipefail
           bash scripts/ci/verify-image.sh "$REF" "$GITHUB_REPOSITORY" | tee verify.log
-      - name: Open the promotion PR
+      - name: Commit the production promotion
         if: steps.staging.outputs.same != 'true'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           SOURCE: ${{ steps.staging.outputs.source }}
           CURRENT: ${{ steps.staging.outputs.current }}
           REF: ${{ steps.staging.outputs.ref }}
-        run: bash scripts/ci/open-promotion-pr.sh
+        run: bash scripts/ci/promote-production.sh
       - name: Nothing to promote
         if: steps.staging.outputs.same == 'true'
         run: echo "Production already runs the staging digest." >> "$GITHUB_STEP_SUMMARY"

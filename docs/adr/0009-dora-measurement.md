@@ -1,6 +1,6 @@
 # 0009. DORA metrics from pipeline-emitted events over a 90-day window
 
-- Status: Accepted
+- Status: Accepted; deployment source amended by [0013](0013-promotion-without-a-bot.md): promotion commits are now the default, and GitHub Deployments are opt-in.
 - Date: 2026-10-25
 
 ## Context

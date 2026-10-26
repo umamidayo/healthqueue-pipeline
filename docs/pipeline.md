@@ -26,10 +26,9 @@ flowchart LR
   end
   PR -- merge --> MAIN
   B2 --> P --> V --> S --> STG
-  STG -. "promote workflow:<br/>re-verify, open PR" .-> PPR[promotion PR<br/>CODEOWNERS review]
-  PPR -- merge --> PRD
-  PRD -. "Argo CD Notifications" .-> GD[GitHub Deployments]
-  GD --> DORA[daily DORA report]
+  STG -. "promote workflow" .-> APR[environment approval<br/>re-verify, commit digest]
+  APR --> PRD
+  APR -. "promotion commits" .-> DORA[daily DORA report]
   classDef j fill:#eef,stroke:#88a
 ```
 
@@ -49,9 +48,9 @@ the pipeline cannot run.
 | `ci / build` | PR: build only; main: push | image (distroless, non-root, digest-pinned bases); SPDX + CycloneDX SBOM; Grype gate; SARIF to code scanning; on main: cosign signature + SBOM attestation | fixable High/Critical vulnerability | 2-4 min |
 | `ci / provenance` | main | SLSA v0.2 provenance from `slsa-github-generator` (Build L3), attached to the image | generator fails | 1-2 min |
 | `ci / verify` | main | `scripts/ci/verify-image.sh`: the same three checks as admission | anything is missing or from the wrong identity/branch | 20s |
-| `ci / promote-staging` | main | commits the digest + `release.json` to `deploy/overlays/staging` (`[skip ci]`, `Source-Revision:` trailer) | push fails after 3 rebases | 15s |
-| Argo CD | cluster | syncs staging (and production after merge); notifies GitHub Deployments | sync fails or admission rejects (`ArgoCDSyncFailing` alert) | 0-3 min |
-| `promote` | manual (or scheduled) | re-verifies the staging digest; opens or refreshes the production PR with evidence | verification fails | 30s |
+| `ci / promote-staging` | main | commits the digest + `release.json` to `deploy/overlays/staging` with `GITHUB_TOKEN` (`[skip ci]`, `Source-Revision:` trailer) | push fails after 3 rebases | 15s |
+| Argo CD | cluster | syncs staging, and production after a promotion commit | sync fails or admission rejects (`ArgoCDSyncFailing` alert) | 0-3 min |
+| `promote` | manual (or scheduled) | waits for `production` environment approval; re-verifies the staging digest; commits it to `deploy/overlays/production`; evidence in the run summary | approval rejected, or verification fails | 30s + approval |
 | `dora` | daily 06:17 UTC | 90-day DORA + toil report in the run summary and as an artifact | API budget exhausted | 1-3 min |
 | `codeql` | PR, main, weekly | JS/TS and workflow (`actions`) static analysis | alerts per repo settings | 2 min |
 | `scorecard` | main, weekly | OpenSSF Scorecard SARIF + public badge data | n/a (informational) | 1 min |
@@ -65,7 +64,7 @@ merge to staging p90 at most 30 minutes. The DORA report measures both.
 |---|---|---|---|
 | Cluster | minikube (`healthqueue` profile) | shared cluster, `healthqueue-staging` ns | shared cluster, `healthqueue-production` ns |
 | Image | `healthqueue-api:local`, built in-node | `ghcr.io/...@sha256` | same digest as staging |
-| Changed by | `up.ps1` (Argo or Direct mode) | CI, automatically | promotion PR merge |
+| Changed by | `up.ps1` (Argo or Direct mode) | CI, automatically | approved `promote` run |
 | Admission | PSA restricted; verify policy not applied | PSA restricted + signature/SBOM/provenance + digest-only | same as staging |
 | Replicas / HPA | 1 / 1-2 | 2 / 2-6 | 3 / 3-10, hard spread across nodes |
 | Chaos hooks | on | off | off |
@@ -73,7 +72,7 @@ merge to staging p90 at most 30 minutes. The DORA report measures both.
 
 ## Rollback
 
-Revert the promotion commit (production: revert the merged PR). Argo CD
+Revert the promotion commit. Argo CD
 syncs the previous digest, which is still signed and still admissible. See
 [runbooks/rollback.md](runbooks/rollback.md).
 
@@ -87,7 +86,7 @@ syncs the previous digest, which is still signed and still admissible. See
 - **Provenance runs after the push, in a separate reusable workflow.** That
   separation is what makes it Build L3: the build steps cannot reach the
   generator's signing identity (docs/slsa.md).
-- **Verify before promote:** a reviewer of a promotion PR, or Argo CD, never
+- **Verify before promote:** an approver of a promotion run, or Argo CD, never
   sees a digest that admission would reject.
 - **Main is never cancelled:** a cancelled run could leave a pushed but
   unsigned image. `concurrency.cancel-in-progress` is PR-only.

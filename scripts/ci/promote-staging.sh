@@ -5,8 +5,10 @@
 # the commit being promoted is a descendant of what staging already runs, so
 # staging never moves backwards.
 set -euo pipefail
+# shellcheck source=scripts/ci/gitops-lib.sh
+source "$(dirname "$0")/gitops-lib.sh"
 
-: "${DIGEST:?}" "${IMAGE:?}" "${GITHUB_SHA:?}" "${APP_SLUG:?}" "${GH_TOKEN:?}"
+: "${DIGEST:?}" "${IMAGE:?}" "${GITHUB_SHA:?}"
 
 current="$(node -p 'require("./deploy/overlays/staging/release.json").sourceRevision || ""')"
 if [ -n "$current" ] && [ "$current" != "$GITHUB_SHA" ] && ! git merge-base --is-ancestor "$current" "$GITHUB_SHA"; then
@@ -20,17 +22,9 @@ if git diff --quiet; then
   exit 0
 fi
 
-bot_id="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/users/${APP_SLUG}%5Bbot%5D" | jq -r .id)"
-git config user.name "${APP_SLUG}[bot]"
-git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+gitops_identity
 git add deploy/overlays/staging
 # The Source-Revision trailer is parsed by the DORA collector (docs/dora.md).
 git commit -m "chore(deploy): promote ${GITHUB_SHA::12} to staging [skip ci]" -m "Source-Revision: ${GITHUB_SHA}" -m "Image: ${IMAGE}@${DIGEST}"
-
-for attempt in 1 2 3; do
-  if git push origin HEAD:main; then exit 0; fi
-  echo "push rejected (attempt $attempt); rebasing onto latest main"
-  git pull --rebase origin main
-done
-echo "could not push the staging promotion after 3 attempts" >&2
-exit 1
+gitops_push_main
+echo "staging -> ${IMAGE}@${DIGEST}" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

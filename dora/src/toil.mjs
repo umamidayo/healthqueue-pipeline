@@ -15,7 +15,7 @@ import { DAY_MS, hoursBetween, median, percentile, ratio } from './stats.mjs';
 
 export const DEFAULT_COSTS = {
   rerunMinutes: 15, // context switch + babysitting per manual CI re-run
-  promotionMinutes: 10, // reviewing and merging one production promotion PR
+  promotionMinutes: 10, // starting + approving one production promote run
   botPrMinutes: 5, // reviewing and merging one dependency-update PR
   incidentResponders: 2, // people engaged per incident for its duration
   waitAttentionFactor: 0.25, // share of CI wait time that blocks the author
@@ -190,9 +190,9 @@ export function recommend(signals, costs = DEFAULT_COSTS, targets = TARGETS) {
       Math.max((signals.promotionWaitP50Hours ?? 0) - targets.promotionWaitP50Hours, 0) * signals.promotionsPerMonth,
     effort: 'L',
     actions: [
-      'Schedule the promote workflow (e.g. hourly in business hours) so a PR is always waiting with the latest verified staging build.',
-      'Adopt Argo Rollouts with an AnalysisTemplate that queries the burn-rate recording rules; auto-merge the promotion PR when staging has soaked for N hours without budget burn.',
-      'Keep the CODEOWNERS approval for changes to policy/infra; relax it for digest-only promotions.',
+      'Schedule the promote workflow (e.g. hourly in business hours) so an approval request with the latest verified staging build is always waiting.',
+      'Adopt Argo Rollouts with an AnalysisTemplate that queries the burn-rate recording rules; remove the required reviewer on the production environment once staging has soaked for N hours without budget burn.',
+      'Keep human review for changes to policy/infra (CODEOWNERS on pull requests); automate digest-only promotions.',
     ],
   });
 

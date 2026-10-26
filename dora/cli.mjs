@@ -8,6 +8,7 @@
 // Common options:
 //   --costs <file.json>   override the toil cost model (see src/toil.mjs)
 //   --summary             also append the markdown to $GITHUB_STEP_SUMMARY
+//   --deployment-source   commits (default) | deployments (Argo CD Notifications)
 //
 // Outputs: dataset.json (raw normalized events), metrics.json, report.md.
 // `collect` reads GITHUB_TOKEN from the environment.
@@ -35,6 +36,7 @@ const { values, positionals } = parseArgs({
     'max-requests': { type: 'string', default: '800' },
     'attribution-hours': { type: 'string', default: '24' },
     summary: { type: 'boolean', default: false },
+    'deployment-source': { type: 'string', default: 'commits' },
   },
 });
 
@@ -55,8 +57,8 @@ function analyze(dataset) {
   console.log(
     [
       `window ${dataset.window.days}d | deploys ${o.deploymentFrequency.deployments} (${o.deploymentFrequency.perWeek.toFixed(1)}/wk)`,
-      `lead p50 ${o.leadTime.p50Hours?.toFixed(1) ?? 'n/a'}h | CFR ${o.changeFailRate.rate === null ? 'n/a' : (o.changeFailRate.rate * 100).toFixed(1) + '%'}`,
-      `recovery p50 ${o.recoveryTime.p50Hours?.toFixed(1) ?? 'n/a'}h | ${toil.recommendations.length} recommendations`,
+      `lead p50 ${o.leadTime.p50Hours === null ? 'n/a' : `${o.leadTime.p50Hours.toFixed(1)}h`} | CFR ${o.changeFailRate.rate === null ? 'n/a' : (o.changeFailRate.rate * 100).toFixed(1) + '%'}`,
+      `recovery p50 ${o.recoveryTime.p50Hours === null ? 'n/a' : `${o.recoveryTime.p50Hours.toFixed(1)}h`} | ${toil.recommendations.length} recommendations`,
       `wrote ${join(values.out, 'report.md')}`,
     ].join('\n'),
   );
@@ -68,7 +70,7 @@ async function main() {
     const repo = values.repo ?? process.env.GITHUB_REPOSITORY;
     if (!repo) throw new Error('--repo owner/name is required (or set GITHUB_REPOSITORY)');
     const client = createGitHubClient({ token: process.env.GITHUB_TOKEN, maxRequests: Number(values['max-requests']) });
-    const dataset = await collectSafely({ client, repo, days: values.days });
+    const dataset = await collectSafely({ client, repo, days: values.days, deploymentSource: values['deployment-source'] });
     console.log(`GitHub API requests used: ${client.used()}/${client.maxRequests}`);
     analyze(dataset);
   } else if (command === 'report') {

@@ -1,4 +1,5 @@
 kube_context               = "prod-cluster"
 argocd_url                 = "https://argocd.example.com"
-github_app_id              = "123456"
-github_app_installation_id = "78901234"
+# Optional: only if you use a GitHub App for Argo CD Notifications (ADR 0013).
+# github_app_id              = "123456"
+# github_app_installation_id = "78901234"

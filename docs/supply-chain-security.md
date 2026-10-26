@@ -25,7 +25,7 @@ start a pod.
 
 | Control | Where |
 |---|---|
-| PR + review + required checks on `main`; CODEOWNERS on prod/platform/IaC/pipeline paths | GitHub rulesets ([operations.md](operations.md#2-repository-rulesets)), `.github/CODEOWNERS` |
+| PR + review + required checks on `main`; CODEOWNERS on prod/platform/IaC/pipeline paths | GitHub rulesets ([operations.md](operations.md#2-protecting-main-optional)), `.github/CODEOWNERS` |
 | CodeQL for JS/TS **and GitHub Actions workflows** (script injection, excessive permissions) | `.github/workflows/codeql.yml` |
 | OpenSSF Scorecard (branch protection, pinning, token permissions, ...) | `.github/workflows/scorecard.yml` |
 
@@ -78,14 +78,14 @@ start a pod.
 | Argo CD AppProjects: app cannot create RBAC or cluster-scoped objects (except its Namespace); policies live in a separate project | `argocd/base/projects.yaml` |
 | Kyverno webhooks exclude platform namespaces, so a policy bug cannot brick the control plane | `infra/modules/platform/values/kyverno.yaml.tftpl` |
 | OpenTofu state + plan encrypted client-side in production | `infra/envs/production/main.tf` |
-| GitHub App private key for Argo CD Notifications stored only in a Kubernetes Secret, never in Tofu state | `values/argocd.yaml.tftpl` (`secret.create: false`) |
+| Production promotion requires `production` environment approval and re-verification; no long-lived bot credentials exist | `promote.yml`, ADR 0013 |
 
 ## Residual risks (accepted, tracked)
 
 | Risk | Why accepted | Mitigation / next step |
 |---|---|---|
 | Actions that download tools at runtime (Grype DB, Syft) are not content-pinned | No input exposes a checksum | harden-runner egress audit; move to `egress-policy: block` with an allow-list |
-| Release bot can push to `main` | Needed for hands-off staging (ADR 0008) | Push ruleset limiting the bot to `deploy/overlays/staging/**` |
+| Promotion jobs can push to `main` | Needed for hands-off GitOps without a bot (ADR 0013) | `contents: write` only in those two jobs; protect `main` with a ruleset whose sole bypass is the deploy key |
 | Public Sigstore dependency at admission | Keyless removes key management | Kyverno result caching; private Sigstore if air-gapped |
 | Kyverno ClusterPolicy deprecation | Still enforced in 1.19 | Migration plan in ADR 0007; `kyverno test` in CI catches removal |
 | Unfixed CVEs pass the gate (`only-fixed`) | Blocking on unfixable CVEs blocks all delivery | Visible in code scanning; distroless + Dependabot digests |
