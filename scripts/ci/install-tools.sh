@@ -39,4 +39,9 @@ f=$(fetch actionlint "https://github.com/rhysd/actionlint/releases/download/v${A
 tar -xzf "$f" -C "$BIN" actionlint
 
 [ -n "${GITHUB_PATH:-}" ] && echo "$BIN" >> "$GITHUB_PATH"
-"$BIN/kubeconform" -v && "$BIN/promtool" --version | head -1 && "$BIN/kyverno" version | head -1 && "$BIN/actionlint" -version | head -1
+# `sed -n 1p` (not `head -1`): head exits early, the writer gets SIGPIPE, and
+# with pipefail the whole script fails with exit 141.
+"$BIN/kubeconform" -v
+"$BIN/promtool" --version | sed -n 1p
+"$BIN/kyverno" version | sed -n 1p
+"$BIN/actionlint" -version | sed -n 1p

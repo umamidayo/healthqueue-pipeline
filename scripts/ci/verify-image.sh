@@ -28,7 +28,9 @@ cosign verify-attestation "${FLAGS[@]}" --certificate-identity "$CI_IDENTITY" --
 
 echo "3/3 SLSA provenance"
 prov="$(cosign verify-attestation "${FLAGS[@]}" --certificate-identity-regexp "$SLSA_IDENTITY_RE" --type slsaprovenance "$REF")"
-predicate="$(echo "$prov" | head -1 | jq -r '.payload' | base64 -d | jq '.predicate')"
+# One JSON line per attestation; take the first. `sed -n 1p`, not `head -1`,
+# so the writer is never cut off (SIGPIPE + pipefail = spurious exit 141).
+predicate="$(printf '%s\n' "$prov" | sed -n 1p | jq -r '.payload' | base64 -d | jq '.predicate')"
 uri="$(echo "$predicate" | jq -r '.invocation.configSource.uri')"
 entry="$(echo "$predicate" | jq -r '.invocation.configSource.entryPoint')"
 want_uri="git+https://github.com/${REPO}@refs/heads/main"
